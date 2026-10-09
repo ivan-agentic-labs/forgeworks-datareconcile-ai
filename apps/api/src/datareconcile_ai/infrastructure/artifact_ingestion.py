@@ -1,4 +1,4 @@
-"""Bounded database CSV artifacts for development/disposable tests, not production storage."""
+"""Bounded verified CSV artifacts using private S3 or a development byte store."""
 import base64
 import csv
 import hashlib
@@ -24,9 +24,13 @@ def reject(status, code, detail):
 class ArtifactIngestion:
     def __init__(self, store):
         self.store = store
+        self.objects = None
+        if os.getenv("S3_ENDPOINT"):
+            from datareconcile_ai.infrastructure.object_storage import ObjectStorage
+            self.objects = ObjectStorage("datareconcile-ai", MAX_BYTES)
 
     def secret(self):
-        if os.getenv("APP_ENV", "development") not in {"development", "test"}:
+        if self.objects is None and os.getenv("APP_ENV", "development") not in {"development", "test"}:
             reject(503, "EXTERNAL_STORAGE_REQUIRED", "Database artifact transfers are restricted to development/test")
         secret = os.getenv("ARTIFACT_SIGNING_SECRET", "")
         if len(secret.encode()) < 32 or secret == os.getenv("DEV_AUTH_SECRET"):
@@ -106,14 +110,22 @@ class ArtifactIngestion:
                 return row["object_generation"]
             if row["status"] != "INTENT_ISSUED":
                 reject(409, "ARTIFACT_STATE_INVALID", "Artifact is not pending upload")
-            generation = str(uuid4())
-            db.execute("UPDATE source_artifacts SET content_base64=?,object_generation=?,status='QUARANTINED' WHERE tenant_id=? AND id=?", (base64.b64encode(body).decode(), generation, tenant, artifact))
+            if self.objects:
+                generation = self.objects.put(tenant, artifact, body, row["sha256"], row["size_bytes"])["generation"]
+                encoded = "s3:" + generation  # Legacy locator field, immutable after upload.
+            else:
+                generation = str(uuid4())
+                encoded = base64.b64encode(body).decode()
+            db.execute("UPDATE source_artifacts SET content_base64=?,object_generation=?,status='QUARANTINED' WHERE tenant_id=? AND id=?", (encoded, generation, tenant, artifact))
             return generation
 
-    @staticmethod
-    def bytes(row):
+    def bytes(self, row):
         if not row or row["content_base64"] is None:
             reject(409, "ARTIFACT_BYTES_MISSING", "Uploaded bytes are required")
+        if str(row["content_base64"]).startswith("s3:"):
+            if not self.objects or row["content_base64"] != "s3:" + row["sha256"]:
+                reject(409, "ARTIFACT_INTEGRITY_FAILURE", "Invalid external object locator")
+            return self.objects.read(row["tenant_id"], row["id"], row["object_generation"], row["sha256"], row["size_bytes"])
         try:
             body = base64.b64decode(row["content_base64"], validate=True)
         except ValueError:
