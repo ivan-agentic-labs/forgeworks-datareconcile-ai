@@ -71,6 +71,17 @@ class Store:
                 CREATE TABLE IF NOT EXISTS tenants(
                     id TEXT PRIMARY KEY, slug TEXT, status TEXT
                 );
+                CREATE TABLE IF NOT EXISTS source_artifacts(
+                    tenant_id TEXT NOT NULL,id TEXT NOT NULL,kind TEXT NOT NULL,
+                    filename TEXT NOT NULL,sha256 TEXT NOT NULL,size_bytes INTEGER NOT NULL,
+                    declared_media_type TEXT,status TEXT NOT NULL,created_at TEXT NOT NULL,
+                    object_generation TEXT,content_base64 TEXT,PRIMARY KEY(tenant_id,id)
+                );
+                CREATE TABLE IF NOT EXISTS source_artifact_commands(
+                    tenant_id TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,
+                    command_key TEXT NOT NULL,request_sha TEXT NOT NULL,artifact_id TEXT NOT NULL,
+                    PRIMARY KEY(tenant_id,actor,action,command_key)
+                );
                 CREATE TABLE IF NOT EXISTS memberships(
                     tenant_id TEXT, user_id TEXT, role TEXT, status TEXT,
                     PRIMARY KEY(tenant_id,user_id)
@@ -199,12 +210,19 @@ class Store:
 
     @staticmethod
     def parse_csv(csv_content: str, currency: str) -> list[dict[str, object]]:
+        try:
+            return Store._parse_csv(csv_content, currency)
+        except csv.Error as error:
+            raise StoreValidationError("CSV_SCHEMA_INVALID", "Malformed CSV quoting or field size") from error
+
+    @staticmethod
+    def _parse_csv(csv_content: str, currency: str) -> list[dict[str, object]]:
         if not isinstance(csv_content, str) or not csv_content.strip():
             raise StoreValidationError("CSV_EMPTY", "csv_content must contain a header and at least one data row")
         if csv_content.startswith("\ufeff"):
             csv_content = csv_content[1:]
         try:
-            reader = csv.DictReader(io.StringIO(csv_content, newline=""))
+            reader = csv.DictReader(io.StringIO(csv_content, newline=""), strict=True)
         except csv.Error as exc:
             raise StoreValidationError("CSV_SCHEMA_INVALID", str(exc)) from exc
         headers = reader.fieldnames or []
@@ -230,6 +248,8 @@ class Store:
             amount_text = str(raw["amount_minor"])
             if not AMOUNT_RE.fullmatch(amount_text):
                 raise StoreValidationError("CSV_AMOUNT_INVALID", f"row {line_number} amount_minor must be a canonical integer minor unit")
+            if len(amount_text) > 20:
+                raise StoreValidationError("CSV_AMOUNT_INVALID", f"row {line_number} amount_minor is outside the signed 64-bit range")
             amount = int(amount_text)
             if amount == 0 or amount < MIN_INT64 or amount > MAX_INT64:
                 raise StoreValidationError("CSV_AMOUNT_INVALID", f"row {line_number} amount_minor is outside the non-zero signed 64-bit range")

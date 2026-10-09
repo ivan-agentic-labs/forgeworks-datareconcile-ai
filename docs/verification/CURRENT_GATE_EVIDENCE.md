@@ -29,7 +29,7 @@ Source: `206665d6d9937cd728f898411351938c074e8609`. This immutable receipt cover
 
 ## Current product scope
 
-Non-demo runtime now rejects metadata-only imports with SOURCE_BYTES_REQUIRED. Synthetic fixture rows require explicit seed provisioning in development/test and cannot be used in PostgreSQL runtime. Inline CSV bytes are digest-checked and schema-validated; external artifact upload/quarantine ingestion remains unimplemented and is not claimed complete.
+Non-demo runtime rejects metadata-only imports with SOURCE_BYTES_REQUIRED. Synthetic fixture rows require explicit seed provisioning in development/test and cannot be used in PostgreSQL runtime. Bounded database-backed source upload, immutable generation/digest/size verification, quarantine, strict UTF-8 CSV validation, commit, download and import from actual uploaded bytes are implemented for development/disposable proofs. Upload/commit/download commands detect idempotency conflicts; transfer capabilities are tenant/action/generation bound and re-check membership. Migration 003 forces tenant RLS on source artifacts and command ledgers. This is not external object storage, malware scanning or retention/deletion proof: production transfers return EXTERNAL_STORAGE_REQUIRED.
 
 Strict synthetic CSV import, exact integer-minor-unit reconciliation, exception review, persisted report bytes and bounded report download. No payment or ledger transfer is performed.
 

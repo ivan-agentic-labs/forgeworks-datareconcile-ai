@@ -10,11 +10,12 @@ from typing import Annotated
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Query
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from datareconcile_ai.infrastructure.store import Store, StoreValidationError
+from datareconcile_ai.infrastructure.artifact_ingestion import ArtifactIngestion, MAX_BYTES
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -36,6 +37,26 @@ class Reconcile(BaseModel):
     left_batch_id: UUID
     right_batch_id: UUID
     rule_version: str = Field(min_length=1, max_length=100)
+
+
+class UploadIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=100)
+    filename: str = Field(min_length=1, max_length=200)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    size_bytes: int = Field(ge=1, le=MAX_BYTES)
+    declared_media_type: str | None = None
+
+
+class CommitArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    size_bytes: int = Field(ge=1, le=MAX_BYTES)
+    object_generation: str = Field(min_length=1, max_length=128)
+
+
+def artifact_response(row):
+    return {key:row[key] for key in ("id","status","kind","sha256","size_bytes","created_at")}
 
 
 class Resolve(BaseModel):
@@ -127,6 +148,7 @@ def create_app(db_path=None, seed=False):
         store.seed()
     app = FastAPI(title="DataReconcile AI MVP", version="0.2.0")
     app.state.store = store
+    artifacts = ArtifactIngestion(store)
 
     @app.exception_handler(HTTPException)
     async def errors(_, exc):
@@ -143,12 +165,56 @@ def create_app(db_path=None, seed=False):
     def health():
         return {"status": "ok", "service": "datareconcile-ai"}
 
+    @app.post("/v1/artifacts/upload-intents", status_code=201)
+    def upload_intent(body: UploadIntent, idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None, c=Depends(scope("artifact:create", store))):
+        return artifacts.intent(c["tenant_id"], c["sub"], idempotency_key, body.model_dump())
+
+    @app.put("/v1/artifact-transfers/{artifact_id}", status_code=201)
+    async def upload_bytes(artifact_id: UUID, request: Request, token: str = Query(max_length=4096)):
+        claims = artifacts.verify_capability(token, str(artifact_id), "upload")
+        content = bytearray()
+        async for chunk in request.stream():
+            if len(content) + len(chunk) > MAX_BYTES:
+                reject(413, "ARTIFACT_TOO_LARGE", "CSV source exceeds 1 MiB")
+            content.extend(chunk)
+        generation = artifacts.put(claims["tenant_id"], str(artifact_id), bytes(content))
+        return {"artifact_id":str(artifact_id), "object_generation":generation}
+
+    @app.post("/v1/artifacts/{artifact_id}/commit", status_code=202)
+    def commit_artifact(artifact_id: UUID, body: CommitArtifact, idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None, c=Depends(scope("artifact:commit", store))):
+        return artifact_response(artifacts.commit(c["tenant_id"], c["sub"], str(artifact_id), idempotency_key, body.model_dump()))
+
+    @app.get("/v1/artifacts/{artifact_id}")
+    def read_artifact(artifact_id: UUID, c=Depends(scope("artifact:read", store))):
+        row = artifacts.record(c["tenant_id"], str(artifact_id))
+        if not row:
+            reject(404, "RESOURCE_NOT_FOUND", "Artifact is not visible")
+        return artifact_response(row)
+
+    @app.post("/v1/artifacts/{artifact_id}/download-intents", status_code=201)
+    def artifact_download(artifact_id: UUID, idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None, c=Depends(scope("artifact:download", store))):
+        return artifacts.download(c["tenant_id"], c["sub"], str(artifact_id), idempotency_key)
+
+    @app.get("/v1/artifact-transfers/{artifact_id}")
+    def download_bytes(artifact_id: UUID, token: str = Query(max_length=4096)):
+        claims = artifacts.verify_capability(token, str(artifact_id), "download")
+        row = artifacts.record(claims["tenant_id"], str(artifact_id))
+        if not row or row["status"] != "AVAILABLE" or row["object_generation"] != claims["generation"]:
+            reject(409, "ARTIFACT_NOT_AVAILABLE", "Verified generation is not available")
+        return Response(artifacts.bytes(row), media_type="text/csv", headers={"Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"})
+
     @app.post("/v1/import-batches", status_code=202)
     def imp(body: Import, c=Depends(scope("import:create", store))):
+        content = body.csv_content
+        source = artifacts.record(c["tenant_id"], str(body.artifact_id))
+        if source:
+            content = artifacts.source(c["tenant_id"], str(body.artifact_id), body.file_sha256)
+            if body.csv_content is not None and body.csv_content != content:
+                reject(409, "SOURCE_CONTENT_CONFLICT", "Inline CSV differs from the committed artifact")
         try:
             row = store.batch(
                 c["tenant_id"], body.source_label, body.file_sha256, body.currency,
-                profile_version=body.profile_version, artifact_id=str(body.artifact_id), csv_content=body.csv_content,
+                profile_version=body.profile_version, artifact_id=str(body.artifact_id), csv_content=content,
             )
         except StoreValidationError as exc:
             status = 409 if exc.code == "DUPLICATE_IMPORT" else 422
