@@ -55,7 +55,7 @@ class Store:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.init()
 
-    def conn(self) -> sqlite3.Connection:
+    def conn(self, tenant=None) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, check_same_thread=False, timeout=10)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
@@ -342,12 +342,14 @@ class Store:
             left_rows, right_rows = self.rows(tenant, left), self.rows(tenant, right)
             used: set[str] = set()
             unmatched = 0
+            matched = 0
             for a in left_rows:
                 match = next(
                     (b for b in right_rows if b["id"] not in used and b["currency"] == a["currency"] and b["amount_minor"] == a["amount_minor"] and b["transaction_type"] == a["transaction_type"]),
                     None,
                 )
                 if match:
+                    matched += 1
                     used.add(match["id"])
                     c.execute(
                         "INSERT INTO allocations(tenant_id,id,run_id,left_id,right_id,rule,matched_amount_minor,currency) VALUES(?,?,?,?,?,?,?,?)",
@@ -359,7 +361,7 @@ class Store:
                     used.add(candidate["id"])
                     reason, right_id = "AMOUNT_MISMATCH", candidate["id"]
                 else:
-                    reason, right_id = "MISSING_RIGHT", a["id"]
+                    reason, right_id = "MISSING_RIGHT", None
                 unmatched += 1
                 policy = a["transaction_type"] if a["transaction_type"] in {"refund", "reversal"} else "investigated"
                 c.execute(
@@ -372,11 +374,11 @@ class Store:
                     policy = b["transaction_type"] if b["transaction_type"] in {"refund", "reversal"} else "investigated"
                     c.execute(
                         "INSERT INTO exceptions(tenant_id,id,run_id,reason,left_id,right_id,status,version,resolution_policy) VALUES(?,?,?,?,?,?,?,?,?)",
-                        (tenant, str(uuid.uuid4()), rid, "MISSING_LEFT", b["id"], b["id"], "OPEN", 1, policy),
+                        (tenant, str(uuid.uuid4()), rid, "MISSING_LEFT", None, b["id"], "OPEN", 1, policy),
                     )
             c.execute("UPDATE runs SET unmatched=? WHERE tenant_id=? AND id=?", (unmatched, tenant, rid))
             self._audit(c, tenant, "reconciliation.run_completed", rid, 1, None, {
-                "run_id": rid, "source_revision": source_revision, "matched_count": len(left_rows) - unmatched,
+                "run_id": rid, "source_revision": source_revision, "matched_count": matched,
                 "exception_count": unmatched, "rule_version": rule,
             })
         return self.get_run(tenant, rid)

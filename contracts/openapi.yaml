@@ -1175,10 +1175,10 @@ components:
         reason_code:
           type: string
         left_transaction_id:
-          type: string
+          type: [string, "null"]
           format: uuid
         right_transaction_id:
-          type: string
+          type: [string, "null"]
           format: uuid
         status:
           type: string

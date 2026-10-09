@@ -116,7 +116,13 @@ def _report_response(row):
 
 
 def create_app(db_path=None, seed=False):
-    store = Store(db_path or os.getenv("RECONCILE_DB_PATH", str(ROOT / ".runtime/reconcile.db")))
+    if os.getenv("RECONCILE_DATABASE_URL"):
+        from datareconcile_ai.infrastructure.postgres_store import PostgresStore
+        store = PostgresStore(os.environ["RECONCILE_DATABASE_URL"])
+    else:
+        if os.getenv("APP_ENV", "development") not in {"development", "test"}:
+            raise ValueError("SQLite is restricted to development/test")
+        store = Store(db_path or os.getenv("RECONCILE_DB_PATH", str(ROOT / ".runtime/reconcile.db")))
     if seed:
         store.seed()
     app = FastAPI(title="DataReconcile AI MVP", version="0.2.0")
@@ -258,7 +264,7 @@ def create_app(db_path=None, seed=False):
 
     @app.get("/v1/jobs/{jid}")
     def job(jid: UUID, c=Depends(scope("job:read", store))):
-        with store.conn() as db:
+        with store.conn(c["tenant_id"]) as db:
             row = db.execute("SELECT * FROM runs WHERE tenant_id=? AND job_id=?", (c["tenant_id"], str(jid))).fetchone()
         if not row:
             return reject(404, "RESOURCE_NOT_FOUND", "Job is not visible")

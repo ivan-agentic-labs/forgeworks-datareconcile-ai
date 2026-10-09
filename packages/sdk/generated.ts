@@ -285,9 +285,9 @@ export interface components {
             run_id: string;
             reason_code: string;
             /** Format: uuid */
-            left_transaction_id: string;
+            left_transaction_id: string | null;
             /** Format: uuid */
-            right_transaction_id: string;
+            right_transaction_id: string | null;
             status: string;
             version?: number;
             /** @enum {string} */
