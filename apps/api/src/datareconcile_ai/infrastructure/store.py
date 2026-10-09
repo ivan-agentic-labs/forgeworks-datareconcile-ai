@@ -15,6 +15,8 @@ from typing import Iterable
 TENANT = "00000000-0000-0000-0000-000000000001"
 USER = "00000000-0000-0000-0000-000000000010"
 MAX_INT64 = 2**63 - 1
+MAX_CSV_BYTES = 1_048_576
+MAX_IMPORT_ROWS = 10_000
 MIN_INT64 = -(2**63)
 AMOUNT_RE = re.compile(r"^-?(0|[1-9][0-9]*)$")
 CSV_REQUIRED = ("external_ref", "currency", "amount_minor", "occurred_at")
@@ -219,6 +221,8 @@ class Store:
     def _parse_csv(csv_content: str, currency: str) -> list[dict[str, object]]:
         if not isinstance(csv_content, str) or not csv_content.strip():
             raise StoreValidationError("CSV_EMPTY", "csv_content must contain a header and at least one data row")
+        if len(csv_content.encode("utf-8")) > MAX_CSV_BYTES:
+            raise StoreValidationError("CSV_BUDGET_EXCEEDED", "CSV source exceeds the 1 MiB import budget")
         if csv_content.startswith("\ufeff"):
             csv_content = csv_content[1:]
         try:
@@ -236,9 +240,13 @@ class Store:
         rows: list[dict[str, object]] = []
         refs: set[str] = set()
         for line_number, raw in enumerate(reader, start=2):
+            if len(rows) >= MAX_IMPORT_ROWS:
+                raise StoreValidationError("CSV_BUDGET_EXCEEDED", "CSV source exceeds 10000 data rows")
             if None in raw or any(value is None for value in raw.values()):
                 raise StoreValidationError("CSV_SCHEMA_INVALID", f"row {line_number} has the wrong number of columns")
             ref = str(raw["external_ref"])
+            if len(ref) > 256:
+                raise StoreValidationError("CSV_EXTERNAL_REF_INVALID", f"external_ref exceeds 256 characters at row {line_number}")
             if not ref or ref.strip() != ref or ref in refs:
                 raise StoreValidationError("CSV_DUPLICATE_EXTERNAL_REF", f"external_ref is empty, padded, or duplicated at row {line_number}")
             refs.add(ref)

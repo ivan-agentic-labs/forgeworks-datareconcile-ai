@@ -39,6 +39,10 @@ Strict synthetic CSV import, exact integer-minor-unit reconciliation, exception 
 
 ## Remaining dependency and implementation register
 
+### Import budget continuation, 2026-10-09
+
+CSV parsing enforces 1 MiB of actual UTF-8 bytes, at most 10000 data rows, and external references up to 256 characters before import writes. Boundary tests cover exactly 10000 rows, overflow and multibyte content. This aligns inline imports with the bounded local artifact path, but does not implement external production storage or production throughput acceptance.
+
 1. Configure a real IdP and provisioned internal identities; finish BFF/session/CSRF/revocation and test them. This includes unfinished code, not only credentials.
 2. Configure external private storage/scanning/retention/deletion and implement remaining source/dataset/upload adapters; do not treat placeholder metadata or quarantined objects as verified bytes.
 3. Supply an isolated runner/network policy and product GitHub App configuration; implement and prove sandbox, webhook/revocation and approval-bound remote effects before enabling them.
