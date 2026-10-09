@@ -1,0 +1,14 @@
+[
+  {
+    "child": "import_rows",
+    "column": "batch_id",
+    "parent": "import_batches",
+    "structural": "passed structural candidate checks"
+  },
+  {
+    "child": "import_rows",
+    "column": "normalized_transaction_id",
+    "parent": "transactions",
+    "structural": "passed structural candidate checks"
+  }
+]

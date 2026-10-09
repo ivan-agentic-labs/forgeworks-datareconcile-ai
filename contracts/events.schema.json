@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.example.invalid/datareconcile-ai/events/v1.schema.json",
+  "title": "DataReconcile AI candidate typed domain events v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "event_type",
+        "event_version",
+        "tenant_id",
+        "aggregate_id",
+        "aggregate_version",
+        "occurred_at",
+        "correlation_id",
+        "payload"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "event_type": {
+          "const": "import.batch_validated"
+        },
+        "event_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregate_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregate_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "correlation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "causation_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "batch_id",
+            "file_sha256",
+            "currency",
+            "accepted_rows",
+            "rejected_rows",
+            "profile_version"
+          ],
+          "properties": {
+            "batch_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "file_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "accepted_rows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rejected_rows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "profile_version": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "event_type",
+        "event_version",
+        "tenant_id",
+        "aggregate_id",
+        "aggregate_version",
+        "occurred_at",
+        "correlation_id",
+        "payload"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "event_type": {
+          "const": "allocation.committed"
+        },
+        "event_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregate_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregate_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "correlation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "causation_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run_id",
+            "left_transaction_id",
+            "right_transaction_id",
+            "amount_minor",
+            "currency",
+            "rule_version"
+          ],
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "left_transaction_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "right_transaction_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "amount_minor": {
+              "type": "integer"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "rule_version": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "event_type",
+        "event_version",
+        "tenant_id",
+        "aggregate_id",
+        "aggregate_version",
+        "occurred_at",
+        "correlation_id",
+        "payload"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "event_type": {
+          "const": "report.finalized"
+        },
+        "event_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregate_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregate_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "correlation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "causation_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run_id",
+            "report_id",
+            "report_sha256",
+            "matched_count",
+            "exception_count",
+            "rejected_count",
+            "input_row_count",
+            "approved_by"
+          ],
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "report_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "report_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "matched_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "exception_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rejected_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "input_row_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "approved_by": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
