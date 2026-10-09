@@ -997,12 +997,47 @@ paths:
         in: path
         required: true
         schema: *id001
+  /v1/report-transfers/{rid}:
+    get:
+      operationId: get_signed_report_bytes
+      security:
+      - ArtifactCapability: []
+      x-required-scope: report:download-capability
+      parameters:
+      - name: rid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 4096
+      responses:
+        '200':
+          description: Immutable report bytes bound to the signed digest
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          description: Invalid or expired capability
+        '409':
+          description: Integrity failure or missing bytes
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ArtifactCapability:
+      type: apiKey
+      in: query
+      name: token
+      description: Short-lived HMAC capability bound to tenant, report and digest; issued after report:read authorization.
   schemas:
     ImportBatch:
       type: object
@@ -1073,7 +1108,10 @@ components:
           type: string
         transaction_type:
           type: string
-          enum: [normal, refund, reversal]
+          enum:
+          - normal
+          - refund
+          - reversal
         row_number:
           type: integer
           minimum: 1
@@ -1149,7 +1187,10 @@ components:
           minimum: 1
         resolution_policy:
           type: string
-          enum: [investigated, refund, reversal]
+          enum:
+          - investigated
+          - refund
+          - reversal
     ExceptionResolution:
       type: object
       additionalProperties: false
@@ -1245,6 +1286,8 @@ components:
           pattern: ^[0-9a-f]{64}$
         totals:
           $ref: '#/components/schemas/ReportTotals'
+        download_url:
+          type: string
     ReportTotals:
       type: object
       additionalProperties: false

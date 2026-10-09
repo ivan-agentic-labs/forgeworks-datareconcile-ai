@@ -151,6 +151,7 @@ class Store:
                 "totals_json": "TEXT",
                 "approved_summary_sha": "TEXT",
                 "run_version": "INTEGER",
+                "content_json": "TEXT",
             })
             c.execute("CREATE INDEX IF NOT EXISTS idx_audit_aggregate ON audit_events(tenant_id,aggregate_id)")
 
@@ -494,11 +495,11 @@ class Store:
             # are an explicit reviewed scope and never become transfers.
             canonical = json.dumps({"source_revision": run["source_revision"], "rule_version": run["rule"], "totals": totals, "approved_summary_sha256": summary}, sort_keys=True, separators=(",", ":"))
             ledger = hashlib.sha256(canonical.encode()).hexdigest()
-            artifact = hashlib.sha256((ledger + "immutable-report-v2").encode()).hexdigest()
+            artifact = hashlib.sha256(canonical.encode()).hexdigest()
             report_id, finalized = str(uuid.uuid4()), now()
             c.execute(
-                "INSERT INTO reports(tenant_id,id,run_id,ledger_sha,artifact_sha,finalized_at,source_revision,totals_json,approved_summary_sha,run_version) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (tenant, report_id, rid, ledger, artifact, finalized, run["source_revision"], json.dumps(totals, sort_keys=True, separators=(",", ":")), summary, version),
+                "INSERT INTO reports(tenant_id,id,run_id,ledger_sha,artifact_sha,finalized_at,source_revision,totals_json,approved_summary_sha,run_version,content_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (tenant, report_id, rid, ledger, artifact, finalized, run["source_revision"], json.dumps(totals, sort_keys=True, separators=(",", ":")), summary, version, canonical),
             )
             c.execute("UPDATE runs SET status='FINALIZED' WHERE tenant_id=? AND id=?", (tenant, rid))
             self._audit(c, tenant, "report.finalized", report_id, 1, None, {
@@ -522,3 +523,4 @@ class Store:
             "INSERT INTO audit_events(tenant_id,id,event_type,aggregate_id,aggregate_version,actor_id,occurred_at,payload_json) VALUES(?,?,?,?,?,?,?,?)",
             (tenant, str(uuid.uuid4()), event_type, aggregate_id, version, actor, now(), json.dumps(payload, sort_keys=True, separators=(",", ":"))),
         )
+

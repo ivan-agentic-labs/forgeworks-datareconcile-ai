@@ -1,6 +1,9 @@
 from __future__ import annotations
+from datareconcile_ai.infrastructure.report_downloads import issue_download, verify_download
+from datareconcile_ai.presentation.authentication import decode_bearer
 
 import os
+import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
@@ -8,7 +11,7 @@ from uuid import UUID
 
 import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from datareconcile_ai.infrastructure.store import Store, StoreValidationError
@@ -63,18 +66,7 @@ def reject(status: int, code: str, detail: str):
 
 
 def auth(authorization: Annotated[str | None, Header()] = None):
-    if not authorization or not authorization.startswith("Bearer "):
-        reject(401, "UNAUTHENTICATED", "Bearer token is required")
-    try:
-        return jwt.decode(
-            authorization[7:],
-            os.getenv("DEV_AUTH_SECRET", "forgeworks-development-secret-32-plus"),
-            algorithms=["HS256"],
-            issuer=os.getenv("AUTH_ISSUER", "https://issuer.synthetic.invalid"),
-            audience=os.getenv("AUTH_AUDIENCE", "forgeworks-api"),
-        )
-    except jwt.PyJWTError:
-        reject(401, "INVALID_TOKEN", "Token signature, issuer, audience, or expiry is invalid")
+    return decode_bearer(authorization)
 
 
 def scope(required: str, store: Store):
@@ -243,13 +235,26 @@ def create_app(db_path=None, seed=False):
         report = store.report(c["tenant_id"], str(rid))
         if not report:
             return reject(404, "RESOURCE_NOT_FOUND", "Report is not visible")
+        download_token, expires = issue_download(c["tenant_id"], str(rid), report["artifact_sha"])
         return {
             "report_id": report["id"],
-            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
-            "download_token": report["artifact_sha"],
+            "expires_at": datetime.fromtimestamp(expires, timezone.utc).isoformat().replace("+00:00", "Z"),
+            "download_token": download_token,
+            "download_url": f"/v1/report-transfers/{rid}?token={download_token}",
             "source_revision": report["source_revision"],
             "totals": __import__("json").loads(report["totals_json"]),
         }
+
+    @app.get("/v1/report-transfers/{rid}")
+    def transfer_report(rid: UUID, token: str):
+        claims = verify_download(token, str(rid))
+        report = store.report(claims["tenant_id"], str(rid))
+        if not report or not report["content_json"]:
+            reject(409, "REPORT_BYTES_UNAVAILABLE", "Persisted report bytes are unavailable")
+        body = report["content_json"].encode("utf-8")
+        if hashlib.sha256(body).hexdigest() != claims["sha256"] or claims["sha256"] != report["artifact_sha"]:
+            reject(409, "REPORT_INTEGRITY_FAILURE", "Report bytes do not match the signed digest")
+        return Response(body, media_type="application/json", headers={"Content-Disposition": "attachment", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"})
 
     @app.get("/v1/jobs/{jid}")
     def job(jid: UUID, c=Depends(scope("job:read", store))):
@@ -267,3 +272,4 @@ def create_app(db_path=None, seed=False):
 
 
 app = create_app(seed=os.getenv("RECONCILE_SEED_FIXTURE", "0") == "1")
+

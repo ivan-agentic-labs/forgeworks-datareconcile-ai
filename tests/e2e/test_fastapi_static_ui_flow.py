@@ -183,6 +183,20 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
         assert download.status_code == 200
         assert download.json()["totals"] == totals
         assert download.json()["source_revision"] == report["source_revision"]
+        transferred = client.get(download.json()["download_url"])
+        assert transferred.status_code == 200
+        import hashlib
+        assert hashlib.sha256(transferred.content).hexdigest() == report["artifact_sha256"]
+        assert transferred.json()["totals"] == totals
+        assert client.get(download.json()["download_url"].replace(report["id"], "00000000-0000-0000-0000-000000000999")).status_code == 403
+        assert client.get(download.json()["download_url"] + "tampered").status_code == 403
+        with client.app.state.store.conn() as db:
+            original = db.execute("SELECT content_json FROM reports WHERE id=?", (report["id"],)).fetchone()[0]
+            db.execute("UPDATE reports SET content_json=? WHERE id=?", ('{}', report["id"]))
+        assert client.get(download.json()["download_url"]).status_code == 409
+        with client.app.state.store.conn() as db:
+            db.execute("UPDATE reports SET content_json=? WHERE id=?", (original, report["id"]))
+
 
         # Finalization is immutable: retries return the original report and do
         # not permit changing the approved summary or ledger artifact.
@@ -215,3 +229,4 @@ def test_static_console_exposes_the_same_flow_and_no_transfer_boundary():
     assert "No-transfer boundary" in html
     assert "/v1/transfers" not in html + js
     assert "financial transfer" in html
+
