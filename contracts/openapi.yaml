@@ -1038,6 +1038,9 @@ components:
         job_id:
           type: string
           format: uuid
+        profile_version:
+          type: string
+          minLength: 1
     ImportRow:
       type: object
       additionalProperties: false
@@ -1068,6 +1071,12 @@ components:
           format: date-time
         row_status:
           type: string
+        transaction_type:
+          type: string
+          enum: [normal, refund, reversal]
+        row_number:
+          type: integer
+          minimum: 1
     ReconcileRun:
       type: object
       additionalProperties: false
@@ -1102,6 +1111,12 @@ components:
           format: uuid
         unmatched_count:
           type: integer
+        source_revision:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        version:
+          type: integer
+          minimum: 1
     ExceptionCase:
       type: object
       additionalProperties: false
@@ -1129,6 +1144,12 @@ components:
           format: uuid
         status:
           type: string
+        version:
+          type: integer
+          minimum: 1
+        resolution_policy:
+          type: string
+          enum: [investigated, refund, reversal]
     ExceptionResolution:
       type: object
       additionalProperties: false
@@ -1192,6 +1213,17 @@ components:
         finalized_at:
           type: string
           format: date-time
+        source_revision:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        approved_summary_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        run_version:
+          type: integer
+          minimum: 1
+        totals:
+          $ref: '#/components/schemas/ReportTotals'
     SignedDownloadLink:
       type: object
       additionalProperties: false
@@ -1207,6 +1239,65 @@ components:
           type: string
           format: date-time
         download_token:
+          type: string
+        source_revision:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        totals:
+          $ref: '#/components/schemas/ReportTotals'
+    ReportTotals:
+      type: object
+      additionalProperties: false
+      required:
+      - left_total_minor
+      - right_total_minor
+      - allocated_total_minor
+      - allocated_left_total_minor
+      - allocated_right_total_minor
+      - source_unbalanced_minor
+      - conservation_discrepancy_minor
+      - matched_count
+      - exception_count
+      - open_exception_count
+      - currency
+      - proof
+      properties:
+        left_total_minor:
+          type: integer
+        right_total_minor:
+          type: integer
+        allocated_total_minor:
+          type: integer
+        allocated_left_total_minor:
+          type: integer
+        allocated_right_total_minor:
+          type: integer
+        source_unbalanced_minor:
+          type: integer
+        conservation_discrepancy_minor:
+          type: integer
+        left_row_count:
+          type: integer
+          minimum: 0
+        right_row_count:
+          type: integer
+          minimum: 0
+        matched_count:
+          type: integer
+          minimum: 0
+        exception_count:
+          type: integer
+          minimum: 0
+        open_exception_count:
+          type: integer
+          minimum: 0
+        rejected_exception_count:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        proof:
           type: string
     CreateImportRequest:
       type: object
@@ -1231,6 +1322,9 @@ components:
           pattern: ^[A-Z]{3}$
         profile_version:
           type: string
+        csv_content:
+          type: string
+          maxLength: 2000000
     CreateReconcileRequest:
       type: object
       additionalProperties: false
