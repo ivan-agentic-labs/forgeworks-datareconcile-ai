@@ -1,0 +1,20 @@
+{
+  "scope": "exact source commit; no G1-E certification",
+  "application_tests": "28 passed",
+  "slug": "datareconcile-ai",
+  "sha": "62da760b7b8c5af6c2e0fc3c1443d7ae294e9b94",
+  "runs": [
+    {
+      "id": 37883302284,
+      "name": "G1 Contract Verification",
+      "conclusion": "success",
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37883302284"
+    },
+    {
+      "id": 37883302344,
+      "name": "DataReconcile MVP Application CI",
+      "conclusion": "success",
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37883302344"
+    }
+  ]
+}
