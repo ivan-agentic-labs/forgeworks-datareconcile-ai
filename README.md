@@ -47,4 +47,6 @@ See [current changes and residual gaps](docs/evidence/ENGINEERING_CONTINUATION.m
 
 Development/disposable source ingestion now supports `/v1/artifacts/upload-intents`, signed bounded byte transfers, `/commit`, verified downloads, and import from a committed CSV artifact. Apply migration `003_source_artifact_ingestion.sql` using the separate migration role. Set a separate `ARTIFACT_SIGNING_SECRET`; never use the authentication signing secret. CSV bytes are limited to 1 MiB and validated before availability. The database-backed transfer adapter fails closed outside development/test; external storage, malware scanning and retention/deletion are still required.
 
+Also apply `004_artifact_immutability.sql`: PostgreSQL rejects changes to declared metadata, uploaded bytes/generation, or backward state transitions even when issued by the tenant application role. SQLite remains a disposable development adapter and does not claim this database-enforced guarantee.
+
 See [current G1/G2 evidence](docs/verification/CURRENT_GATE_EVIDENCE.md), [exact source receipt](docs/evidence/MAIN_VERIFICATION_2026-10-09.json), and [owner main authorization](docs/governance/ENGINEERING_MAIN_AUTHORIZATION_2026-10-09.md). PostgreSQL adapters exist for all five independent projects. Historical evidence retains its source SHA and narrower scope.

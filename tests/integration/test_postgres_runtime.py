@@ -19,7 +19,7 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
     root=Path(__file__).resolve().parents[2];other=str(uuid4())
     with psycopg.connect(owner) as db:
         if db.execute("SELECT to_regclass('import_batches')").fetchone()[0]:pytest.fail('Proof requires a fresh empty database')
-        for name in ['001_reconcile_mvp.sql','002_reconcile_runtime.sql','003_source_artifact_ingestion.sql']:
+        for name in ['001_reconcile_mvp.sql','002_reconcile_runtime.sql','003_source_artifact_ingestion.sql','004_artifact_immutability.sql']:
             db.execute((root/'migrations/versions'/name).read_text())
         db.execute("CREATE ROLE fw_runtime_test LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'synthetic-local-runtime-test-only'")
         db.execute('GRANT fw_datareconcile_ai_rw TO fw_runtime_test')
@@ -89,6 +89,13 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
         record,commit=upload(client)
         committed=client.post(f"/v1/artifacts/{record['artifact_id']}/commit",headers=auth('artifact:commit','pg-artifact-commit-001'),json=commit)
         assert committed.status_code==202 and committed.json()['status']=='AVAILABLE',committed.text
+        with store.conn(TENANT) as db:
+            for statement,parameters in [
+                ("UPDATE source_artifacts SET content_base64=? WHERE id=?",('dGFtcGVy',record['artifact_id'])),
+                ("UPDATE source_artifacts SET sha256=? WHERE id=?",('e'*64,record['artifact_id'])),
+                ("UPDATE source_artifacts SET status='QUARANTINED' WHERE id=?",(record['artifact_id'],))]:
+                with pytest.raises(psycopg.errors.RaiseException):
+                    db.execute(statement,parameters)
         imported=client.post('/v1/import-batches',headers=h('import:create'),json={'source_label':'uploaded-csv','artifact_id':record['artifact_id'],'file_sha256':commit['sha256'],'currency':'USD','profile_version':'strict-v1'})
         assert imported.status_code==202 and imported.json()['row_count']==1,imported.text
         download=client.post(f"/v1/artifacts/{record['artifact_id']}/download-intents",headers=auth('artifact:download','pg-artifact-download-001'))

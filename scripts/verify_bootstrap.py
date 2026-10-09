@@ -22,7 +22,7 @@ for p in root.glob(".github/workflows/*.yml"):
     if data.get("permissions") != {"contents": "read"}:
         errors.append(f"workflow permissions: {p.relative_to(root)}")
 for p in root.glob("migrations/versions/*.sql"):
-    if p.name not in {"001_reconcile_mvp.sql", "002_reconcile_runtime.sql", "003_source_artifact_ingestion.sql"}:
+    if p.name not in {"001_reconcile_mvp.sql", "002_reconcile_runtime.sql", "003_source_artifact_ingestion.sql", "004_artifact_immutability.sql"}:
         errors.append(f"unapproved migration: {p.relative_to(root)}")
 patterns = {
     "private key": r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",

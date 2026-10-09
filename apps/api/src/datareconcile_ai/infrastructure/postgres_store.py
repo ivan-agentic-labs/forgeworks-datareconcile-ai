@@ -113,6 +113,8 @@ class PostgresStore(Store):
                 raise ValueError("Apply migration 002 with the migration role before starting runtime")
             if not db.execute("SELECT to_regclass('source_artifacts') AS present").fetchone()["present"]:
                 raise ValueError("Apply migration 003 before starting artifact ingestion runtime")
+            if not db.execute("SELECT 1 FROM pg_trigger WHERE tgrelid='source_artifacts'::regclass AND tgname='source_artifact_immutable' AND tgenabled='O' AND NOT tgisinternal").fetchone():
+                raise ValueError('Apply migration 004 before starting immutable artifact runtime')
 
     @tenant_method
     def member(self, tenant, user):
