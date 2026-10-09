@@ -43,6 +43,10 @@ Strict synthetic CSV import, exact integer-minor-unit reconciliation, exception 
 
 CSV parsing enforces 1 MiB of actual UTF-8 bytes, at most 10000 data rows, and external references up to 256 characters before import writes. Boundary tests cover exactly 10000 rows, overflow and multibyte content. This aligns inline imports with the bounded local artifact path, but does not implement external production storage or production throughput acceptance.
 
+Aggregate monetary totals now accumulate exact Python integers from persisted minor units instead of SQLite SUM, which can overflow even when each source row is valid int64. Tests cover totals greater than signed 64-bit range. Backend JSON integers preserve exact values; JavaScript consumers still need an explicit large-integer transport/decoding strategy before claiming end-to-end precision for such totals.
+
+Matching indexes right-hand candidates by currency, exact minor amount and transaction type, consuming queues in original row order. This preserves the existing amount-based rule and one-use allocation behavior while removing the repeated quadratic scan. It is not a semantic external-reference matching rule or measured production throughput claim.
+
 1. Configure a real IdP and provisioned internal identities; finish BFF/session/CSRF/revocation and test them. This includes unfinished code, not only credentials.
 2. Configure external private storage/scanning/retention/deletion and implement remaining source/dataset/upload adapters; do not treat placeholder metadata or quarantined objects as verified bytes.
 3. Supply an isolated runner/network policy and product GitHub App configuration; implement and prove sandbox, webhook/revocation and approval-bound remote effects before enabling them.

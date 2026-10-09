@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from collections import defaultdict, deque
 import hashlib
 import io
 import json
@@ -375,14 +376,15 @@ class Store:
                     return existing
                 raise
             left_rows, right_rows = self.rows(tenant, left), self.rows(tenant, right)
+            right_candidates = defaultdict(deque)
+            for row in right_rows:
+                right_candidates[(row["currency"], row["amount_minor"], row["transaction_type"])].append(row)
             used: set[str] = set()
             unmatched = 0
             matched = 0
             for a in left_rows:
-                match = next(
-                    (b for b in right_rows if b["id"] not in used and b["currency"] == a["currency"] and b["amount_minor"] == a["amount_minor"] and b["transaction_type"] == a["transaction_type"]),
-                    None,
-                )
+                candidates = right_candidates[(a["currency"], a["amount_minor"], a["transaction_type"])]
+                match = candidates.popleft() if candidates else None
                 if match:
                     matched += 1
                     used.add(match["id"])
@@ -480,11 +482,16 @@ class Store:
         if not run:
             return None
         with self.conn() as c:
-            left = c.execute("SELECT COALESCE(SUM(amount_minor),0) AS total, COUNT(*) AS count FROM rows_ WHERE tenant_id=? AND batch_id=?", (tenant, run["left_batch"])).fetchone()
-            right = c.execute("SELECT COALESCE(SUM(amount_minor),0) AS total, COUNT(*) AS count FROM rows_ WHERE tenant_id=? AND batch_id=?", (tenant, run["right_batch"])).fetchone()
-            allocated = c.execute("SELECT COALESCE(SUM(matched_amount_minor),0) AS total, COUNT(*) AS count FROM allocations WHERE tenant_id=? AND run_id=?", (tenant, rid)).fetchone()
-            allocated_left = c.execute("SELECT COALESCE(SUM(r.amount_minor),0) AS total FROM allocations a JOIN rows_ r ON r.tenant_id=a.tenant_id AND r.id=a.left_id WHERE a.tenant_id=? AND a.run_id=?", (tenant, rid)).fetchone()
-            allocated_right = c.execute("SELECT COALESCE(SUM(r.amount_minor),0) AS total FROM allocations a JOIN rows_ r ON r.tenant_id=a.tenant_id AND r.id=a.right_id WHERE a.tenant_id=? AND a.run_id=?", (tenant, rid)).fetchone()
+            def exact_total(statement, params):
+                values = c.execute(statement, params).fetchall()
+                return {"total": sum(int(value[0]) for value in values), "count": len(values)}
+            # Each source value fits int64; aggregate totals may legitimately not.
+            # Python integer accumulation avoids SQLite SUM overflow and float loss.
+            left = exact_total("SELECT amount_minor FROM rows_ WHERE tenant_id=? AND batch_id=?", (tenant, run["left_batch"]))
+            right = exact_total("SELECT amount_minor FROM rows_ WHERE tenant_id=? AND batch_id=?", (tenant, run["right_batch"]))
+            allocated = exact_total("SELECT matched_amount_minor FROM allocations WHERE tenant_id=? AND run_id=?", (tenant, rid))
+            allocated_left = exact_total("SELECT r.amount_minor FROM allocations a JOIN rows_ r ON r.tenant_id=a.tenant_id AND r.id=a.left_id WHERE a.tenant_id=? AND a.run_id=?", (tenant, rid))
+            allocated_right = exact_total("SELECT r.amount_minor FROM allocations a JOIN rows_ r ON r.tenant_id=a.tenant_id AND r.id=a.right_id WHERE a.tenant_id=? AND a.run_id=?", (tenant, rid))
             open_count = c.execute("SELECT COUNT(*) FROM exceptions WHERE tenant_id=? AND run_id=? AND status='OPEN'", (tenant, rid)).fetchone()[0]
             rejected_count = c.execute("SELECT COUNT(*) FROM exceptions e JOIN resolutions r ON r.tenant_id=e.tenant_id AND r.exception_id=e.id WHERE e.tenant_id=? AND e.run_id=? AND r.decision='reject'", (tenant, rid)).fetchone()[0]
             return {

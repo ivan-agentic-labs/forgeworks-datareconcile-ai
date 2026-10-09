@@ -1,7 +1,23 @@
 import pytest
-from datareconcile_ai.infrastructure.store import Store, StoreValidationError, MAX_CSV_BYTES, MAX_IMPORT_ROWS
+import hashlib
+from datareconcile_ai.infrastructure.store import Store, StoreValidationError, MAX_CSV_BYTES, MAX_IMPORT_ROWS, MAX_INT64, TENANT
 
 HEADER = "external_ref,currency,amount_minor,occurred_at\n"
+
+
+def test_aggregate_minor_units_remain_exact_beyond_signed64(tmp_path):
+    store = Store(str(tmp_path / "exact.db")); store.seed()
+    content = HEADER + f"synthetic-a,USD,{MAX_INT64},2026-10-09T00:00:00Z\nsynthetic-b,USD,{MAX_INT64},2026-10-09T00:00:00Z\n"
+    digest = hashlib.sha256(content.encode()).hexdigest()
+    left = store.batch(TENANT, "left", digest, "USD", csv_content=content)
+    right_content = content.replace("synthetic-", "bank-")
+    right = store.batch(TENANT, "right", hashlib.sha256(right_content.encode()).hexdigest(), "USD", csv_content=right_content)
+    run = store.run(TENANT, left["id"], right["id"], "exact-v1")
+    totals = store.totals(TENANT, run["id"])
+    assert totals["left_total_minor"] == 2 * MAX_INT64
+    assert totals["right_total_minor"] == 2 * MAX_INT64
+    assert totals["source_unbalanced_minor"] == 0
+    assert totals["allocated_total_minor"] == 2 * MAX_INT64
 
 
 def test_row_budget_accepts_boundary_and_rejects_overflow():
