@@ -29,6 +29,8 @@ Source: `206665d6d9937cd728f898411351938c074e8609`. This immutable receipt cover
 
 ## Current product scope
 
+Disposable logical restore verification now compares actual tenant RLS policy expressions/role bindings, table grants, and non-internal trigger definitions/functions, in addition to row digests, columns, constraints and RLS flags. This remains a logical disposable proof, not PITR, regional failover or production operating acceptance.
+
 Migration 004 enforces artifact metadata and uploaded byte/generation immutability inside PostgreSQL, with guarded state transitions. Runtime startup requires the enabled trigger. Disposable proof attempts mutations using the application role and expects database rejection. SQLite integrity checks are application-level only; external retention/deletion and production storage remain open.
 
 Non-demo runtime rejects metadata-only imports with SOURCE_BYTES_REQUIRED. Synthetic fixture rows require explicit seed provisioning in development/test and cannot be used in PostgreSQL runtime. Bounded database-backed source upload, immutable generation/digest/size verification, quarantine, strict UTF-8 CSV validation, commit, download and import from actual uploaded bytes are implemented for development/disposable proofs. Upload/commit/download commands detect idempotency conflicts; transfer capabilities are tenant/action/generation bound and re-check membership. Migration 003 forces tenant RLS on source artifacts and command ledgers. This is not external object storage, malware scanning or retention/deletion proof: production transfers return EXTERNAL_STORAGE_REQUIRED.
