@@ -19,7 +19,6 @@ cleanup() {
 trap cleanup EXIT
 "${psql_admin[@]}" -f "$root/migrations/versions/001_reconcile_mvp.sql"
 "${psql_admin[@]}" <<SQL
-DROP OWNED BY ${app_role};
 DROP ROLE IF EXISTS ${app_role};
 CREATE ROLE ${app_role} LOGIN PASSWORD '${app_password}';
 GRANT USAGE ON SCHEMA public TO ${app_role};
