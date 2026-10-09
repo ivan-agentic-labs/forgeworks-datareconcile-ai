@@ -29,6 +29,8 @@ Source: `206665d6d9937cd728f898411351938c074e8609`. This immutable receipt cover
 
 ## Current product scope
 
+Non-demo runtime now rejects metadata-only imports with SOURCE_BYTES_REQUIRED. Synthetic fixture rows require explicit seed provisioning in development/test and cannot be used in PostgreSQL runtime. Inline CSV bytes are digest-checked and schema-validated; external artifact upload/quarantine ingestion remains unimplemented and is not claimed complete.
+
 Strict synthetic CSV import, exact integer-minor-unit reconciliation, exception review, persisted report bytes and bounded report download. No payment or ledger transfer is performed.
 
 ## Remaining dependency and implementation register

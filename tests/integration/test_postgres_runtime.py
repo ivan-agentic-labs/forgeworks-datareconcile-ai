@@ -29,6 +29,9 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
     info.update(user='fw_runtime_test',password='synthetic-local-runtime-test-only');runtime=make_conninfo(**info)
     with pytest.raises(ValueError,match='superuser'):PostgresStore(owner)
     store=PostgresStore(runtime)
+    with pytest.raises(StoreValidationError) as missing_source:
+        store.batch(TENANT,'metadata-only','a'*64,'USD')
+    assert missing_source.value.code=='SOURCE_BYTES_REQUIRED'
     assert not store.member(TENANT, "unmapped-oidc-subject")
     # Runtime login and its group cannot own tenant/provisioning tables either.
     for table, new_owner in [('memberships','fw_runtime_test'),('tenants',ROLE)]:

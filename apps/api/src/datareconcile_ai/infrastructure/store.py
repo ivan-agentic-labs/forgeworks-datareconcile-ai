@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import re
 import sqlite3
 import uuid
@@ -51,6 +52,7 @@ class StoreValidationError(ValueError):
 class Store:
     def __init__(self, path: str):
         self.path = path
+        self.allow_fixture_imports = False
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.init()
@@ -163,12 +165,15 @@ class Store:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
     def seed(self) -> None:
+        if os.getenv("APP_ENV", "development") not in {"development", "test"}:
+            raise ValueError("Synthetic fixture provisioning is restricted to development/test")
         with self.conn() as c:
             c.execute("INSERT OR IGNORE INTO tenants VALUES(?,?,?)", (TENANT, "synthetic-demo", "ACTIVE"))
             c.execute(
                 "INSERT OR IGNORE INTO memberships VALUES(?,?,?,?)",
                 (TENANT, USER, "editor", "ACTIVE"),
             )
+        self.allow_fixture_imports = True
 
     def member(self, tenant: str, user: str) -> bool:
         with self.conn() as c:
@@ -269,6 +274,8 @@ class Store:
                 raise StoreValidationError("SOURCE_DIGEST_MISMATCH", "file_sha256 does not match csv_content")
             values = self.parse_csv(csv_content, currency)
         else:
+            if not getattr(self, "allow_fixture_imports", False) or os.getenv("APP_ENV", "development") not in {"development", "test"}:
+                raise StoreValidationError("SOURCE_BYTES_REQUIRED", "Verified CSV source bytes are required; artifact metadata alone is not an import")
             values = self._fixture_rows(label)
             for value in values:
                 value["currency"] = currency
