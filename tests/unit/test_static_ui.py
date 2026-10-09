@@ -21,3 +21,11 @@ def test_static_console_covers_reconciliation_lifecycle_and_safety_copy():
     assert "No-transfer boundary" in html
     assert "STALE_VERSION" in js
     assert "conservation" in html.lower()
+
+
+def test_static_console_preserves_large_integer_precision_and_uses_safe_dom_writes():
+    js = (ROOT / "apps/web/app.js").read_text()
+    assert "BigInt(String(value))" in js
+    assert "sum + BigInt(String(row.amount_minor))" in js
+    assert "innerHTML" not in js
+    assert "textContent" in js

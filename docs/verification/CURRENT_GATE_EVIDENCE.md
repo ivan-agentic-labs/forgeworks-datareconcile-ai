@@ -54,3 +54,6 @@ Matching indexes right-hand candidates by currency, exact minor amount and trans
 5. Obtain domain/legal/privacy/operations/independent acceptance. Production remains outside this authorized execution scope.
 
 No background completion, production readiness or full-G1-E PASS is asserted.
+
+## Latest local continuation — frontend precision and DOM safety
+The static console now formats monetary and count values from decimal strings through `BigInt`, accumulates row totals without JavaScript `Number` coercion, and renders batch/exception/report values using DOM node `textContent` rather than raw `innerHTML` interpolation. Regression tests cover the large-integer path and assert that the console contains no `innerHTML` writes. This closes a concrete consumer-side precision/XSS gap in the synthetic UI only; it does not establish browser, CSP, BFF/session, external storage, or production acceptance evidence.
