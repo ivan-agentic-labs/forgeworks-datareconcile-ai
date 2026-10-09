@@ -9,10 +9,7 @@ jobs:
   rls-negative-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:17
-        env:
+    env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: g2_only_disposable_password
           POSTGRES_DB: forgeworks_g2
@@ -26,13 +23,13 @@ jobs:
     env:
       G2_DISPOSABLE_DB: 'yes'
       PGHOST: '127.0.0.1'
-      PGPORT: '5432'
+      PGPORT: '5438'
       PGUSER: postgres
       PGPASSWORD: g2_only_disposable_password
       PGDATABASE: forgeworks_g2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install psql client
-        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Start fresh native PostgreSQL 17
+        run: bash scripts/setup_disposable_postgres.sh g2
       - name: Execute role-based tenant isolation negative test
         run: bash scripts/probe_disposable_postgres_rls.sh
