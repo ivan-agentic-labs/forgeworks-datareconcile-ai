@@ -307,7 +307,7 @@ def create_app(db_path=None, seed=False):
         report = store.report(c["tenant_id"], str(rid))
         if not report:
             return reject(404, "RESOURCE_NOT_FOUND", "Report is not visible")
-        download_token, expires = issue_download(c["tenant_id"], str(rid), report["artifact_sha"])
+        download_token, expires = issue_download(c["tenant_id"], c["sub"], str(rid), report["artifact_sha"])
         return {
             "report_id": report["id"],
             "expires_at": datetime.fromtimestamp(expires, timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -320,6 +320,8 @@ def create_app(db_path=None, seed=False):
     @app.get("/v1/report-transfers/{rid}")
     def transfer_report(rid: UUID, token: str):
         claims = verify_download(token, str(rid))
+        if not store.member(claims["tenant_id"], claims["actor"]):
+            reject(403, "MEMBERSHIP_REVOKED", "Report capability owner is no longer an active member")
         report = store.report(claims["tenant_id"], str(rid))
         if not report or not report["content_json"]:
             reject(409, "REPORT_BYTES_UNAVAILABLE", "Persisted report bytes are unavailable")

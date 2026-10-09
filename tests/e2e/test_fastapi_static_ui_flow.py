@@ -188,6 +188,13 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
         import hashlib
         assert hashlib.sha256(transferred.content).hexdigest() == report["artifact_sha256"]
         assert transferred.json()["totals"] == totals
+        # A previously issued capability must not survive membership revocation.
+        with client.app.state.store.conn() as db:
+            db.execute("UPDATE memberships SET status='REVOKED' WHERE tenant_id=? AND user_id=?", (TENANT, USER))
+        revoked_transfer = client.get(download.json()["download_url"])
+        assert revoked_transfer.status_code == 403
+        with client.app.state.store.conn() as db:
+            db.execute("UPDATE memberships SET status='ACTIVE' WHERE tenant_id=? AND user_id=?", (TENANT, USER))
         assert client.get(download.json()["download_url"].replace(report["id"], "00000000-0000-0000-0000-000000000999")).status_code == 403
         assert client.get(download.json()["download_url"] + "tampered").status_code == 403
         with client.app.state.store.conn() as db:
