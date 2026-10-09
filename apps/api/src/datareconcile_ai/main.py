@@ -162,6 +162,11 @@ def create_app(db_path=None, seed=False):
             media_type="application/problem+json" if exc.status_code >= 400 else "application/json",
         )
 
+    @app.get("/v1/auth/config")
+    def auth_config():
+        key=os.getenv("SUPABASE_PUBLISHABLE_KEY","")
+        return {"enabled":os.getenv("AUTH_MODE")=="supabase" and key.startswith("sb_publishable_"), "supabase_url":os.getenv("SUPABASE_URL",""), "publishable_key":key if key.startswith("sb_publishable_") else "", "product":"datareconcile-ai", "environment":os.getenv("APP_ENV","development")}
+
     @app.get("/readyz")
     def ready():
         from datareconcile_ai.presentation.authentication import readiness
@@ -347,6 +352,16 @@ def create_app(db_path=None, seed=False):
             "created_at": row["created_at"], "state_version": row["version"],
             "attempt_count": 1, "last_error_code": None,
         }
+
+    @app.get("/", include_in_schema=False)
+    def home():
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/ui/",status_code=307)
+
+    from fastapi.staticfiles import StaticFiles
+    web_dir=ROOT / "apps" / "web"
+    if web_dir.is_dir():
+        app.mount("/ui", StaticFiles(directory=str(web_dir),html=True),name="web-console")
 
     return app
 
