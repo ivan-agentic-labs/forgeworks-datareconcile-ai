@@ -1,8 +1,8 @@
 # G1 runtime evidence — datareconcile-ai
 
-**Evidence date:** 2026-10-09  
-**Evidence source revision (current `main` at audit start):** `09b2628b53e1dd66c0b5fc80dc26323d4b558891`  
-**Repository:** `ivan-agentic-labs/forgeworks-datareconcile-ai`  
+**Evidence date:** 2026-10-09
+**Evidence source revision (current `main` at audit start):** `09b2628b53e1dd66c0b5fc80dc26323d4b558891`
+**Repository:** `ivan-agentic-labs/forgeworks-datareconcile-ai`
 **Evidence owner/reviewer:** no independent reviewer approval is recorded; this file reports reproducible results only.
 
 This record supplements, and does not supersede, `docs/governance/MASTER_G1_DECISION.md`, `docs/verification/DESIGN_GATE_STATUS.md`, and `docs/verification/TEST_PLAN.md`. The source revision above is the exact revision tested and referenced by the Actions runs below. The documentation commit that adds this record necessarily has a different Git SHA.
