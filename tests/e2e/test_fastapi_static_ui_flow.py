@@ -100,6 +100,20 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
         assert first_run.status_code == retry_run.status_code == 202
         run = first_run.json()
         assert retry_run.json()["id"] == run["id"]
+        replay_run = client.post(
+            "/v1/reconciliation-runs",
+            headers=headers("reconcile:run", idempotency_key="e2e-reconcile-0001"),
+            json=reconcile_body,
+        )
+        assert replay_run.status_code == 202
+        assert replay_run.json() == run
+        conflict_run = client.post(
+            "/v1/reconciliation-runs",
+            headers=headers("reconcile:run", idempotency_key="e2e-reconcile-0001"),
+            json={**reconcile_body, "rule_version": "different-rule-v2"},
+        )
+        assert conflict_run.status_code == 409
+        assert conflict_run.json()["code"] == "IDEMPOTENCY_CONFLICT"
         assert run["unmatched_count"] == 1
 
         exception_page = client.get(

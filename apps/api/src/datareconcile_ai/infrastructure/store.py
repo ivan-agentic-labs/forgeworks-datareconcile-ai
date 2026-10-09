@@ -341,23 +341,37 @@ class Store:
         with self.conn() as c:
             return c.execute("SELECT * FROM rows_ WHERE tenant_id=? AND batch_id=? ORDER BY row_number", (tenant, bid)).fetchall()
 
-    def run(self, tenant: str, left: str, right: str, rule: str) -> sqlite3.Row:
+    def run(self, tenant: str, left: str, right: str, rule: str, *, actor: str | None = None, idempotency_key: str | None = None) -> sqlite3.Row:
         left_batch, right_batch = self.get_batch(tenant, left), self.get_batch(tenant, right)
         if not left_batch or not right_batch:
             raise StoreValidationError("RESOURCE_NOT_FOUND", "Import is not visible")
         source_revision = hashlib.sha256(
             (left_batch["file_sha"] + right_batch["file_sha"] + left_batch["profile_version"] + right_batch["profile_version"] + rule).encode()
         ).hexdigest()
+        request_sha = hashlib.sha256(json.dumps({"left_batch_id": left, "right_batch_id": right, "rule_version": rule}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if idempotency_key and (not actor or not 16 <= len(idempotency_key) <= 128):
+            raise StoreValidationError("IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key must be 16–128 characters")
         with self.conn() as c:
             # Serialize the read/insert pair.  A pre-transaction read is not
             # sufficient: two workers can both observe no run and then race
             # on the business-key UNIQUE constraint.
             c.execute("BEGIN IMMEDIATE")
+            if idempotency_key:
+                command = c.execute("SELECT * FROM source_artifact_commands WHERE tenant_id=? AND actor=? AND action='reconcile' AND command_key=?", (tenant, actor, idempotency_key)).fetchone()
+                if command:
+                    if command["request_sha"] != request_sha:
+                        raise StoreValidationError("IDEMPOTENCY_CONFLICT", "Key was already used with another reconciliation request")
+                    replay = c.execute("SELECT * FROM runs WHERE tenant_id=? AND id=?", (tenant, command["artifact_id"])).fetchone()
+                    if replay:
+                        return replay
+                    raise StoreValidationError("IDEMPOTENCY_RECONCILIATION_REQUIRED", "The idempotent reconciliation result is unavailable")
             existing = c.execute(
                 "SELECT * FROM runs WHERE tenant_id=? AND left_batch=? AND right_batch=? AND rule=?",
                 (tenant, left, right, rule),
             ).fetchone()
             if existing:
+                if idempotency_key:
+                    c.execute("INSERT INTO source_artifact_commands VALUES(?,?,?,?,?,?)", (tenant, actor, "reconcile", idempotency_key, request_sha, existing["id"]))
                 return existing
             rid, jid, created = str(uuid.uuid4()), str(uuid.uuid4()), now()
             try:
@@ -418,6 +432,8 @@ class Store:
                 "run_id": rid, "source_revision": source_revision, "matched_count": matched,
                 "exception_count": unmatched, "rule_version": rule,
             })
+            if idempotency_key:
+                c.execute("INSERT INTO source_artifact_commands VALUES(?,?,?,?,?,?)", (tenant, actor, "reconcile", idempotency_key, request_sha, rid))
         return self.get_run(tenant, rid)
 
     def get_run(self, tenant: str, rid: str) -> sqlite3.Row | None:

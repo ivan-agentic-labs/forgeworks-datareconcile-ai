@@ -237,7 +237,7 @@ def create_app(db_path=None, seed=False):
         return {"items": items, "next_cursor": None, "has_more": False}
 
     @app.post("/v1/reconciliation-runs", status_code=202)
-    def reconcile(body: Reconcile, c=Depends(scope("reconcile:run", store))):
+    def reconcile(body: Reconcile, idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None, c=Depends(scope("reconcile:run", store))):
         left = store.get_batch(c["tenant_id"], str(body.left_batch_id))
         right = store.get_batch(c["tenant_id"], str(body.right_batch_id))
         if not left or not right:
@@ -245,9 +245,9 @@ def create_app(db_path=None, seed=False):
         if left["currency"] != right["currency"]:
             return reject(409, "CURRENCY_MISMATCH", "Only same-currency matching is supported")
         try:
-            run = store.run(c["tenant_id"], str(body.left_batch_id), str(body.right_batch_id), body.rule_version)
+            run = store.run(c["tenant_id"], str(body.left_batch_id), str(body.right_batch_id), body.rule_version, actor=c["sub"], idempotency_key=idempotency_key)
         except StoreValidationError as exc:
-            return reject(404 if exc.code == "RESOURCE_NOT_FOUND" else 422, exc.code, exc.detail)
+            return reject(404 if exc.code == "RESOURCE_NOT_FOUND" else 409 if exc.code in {"IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_RECONCILIATION_REQUIRED"} else 400 if exc.code == "IDEMPOTENCY_KEY_REQUIRED" else 422, exc.code, exc.detail)
         return {
             "id": run["id"], "status": run["status"], "created_at": run["created_at"],
             "left_batch_id": run["left_batch"], "right_batch_id": run["right_batch"],
