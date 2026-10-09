@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datareconcile_ai.infrastructure.report_downloads import issue_download, verify_download
-from datareconcile_ai.presentation.authentication import decode_bearer
+from datareconcile_ai.presentation.authentication import decode_bearer, verify_session
 
 import os
 import hashlib
@@ -92,6 +92,7 @@ def auth(authorization: Annotated[str | None, Header()] = None):
 
 def scope(required: str, store: Store):
     def dependency(c=Depends(auth)):
+        verify_session(store, c)
         # Tenant context is derived only from the verified token and membership;
         # no request body/path value can widen the authorization scope.
         if not c.get("tenant_id") or not c.get("sub") or not store.member(c["tenant_id"], c["sub"]):
@@ -160,6 +161,11 @@ def create_app(db_path=None, seed=False):
             },
             media_type="application/problem+json" if exc.status_code >= 400 else "application/json",
         )
+
+    @app.get("/readyz")
+    def ready():
+        from datareconcile_ai.presentation.authentication import readiness
+        return readiness(store)
 
     @app.get("/healthz")
     def health():
