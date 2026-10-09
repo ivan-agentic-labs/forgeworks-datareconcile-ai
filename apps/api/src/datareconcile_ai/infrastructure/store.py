@@ -312,18 +312,32 @@ class Store:
             (left_batch["file_sha"] + right_batch["file_sha"] + left_batch["profile_version"] + right_batch["profile_version"] + rule).encode()
         ).hexdigest()
         with self.conn() as c:
+            # Serialize the read/insert pair.  A pre-transaction read is not
+            # sufficient: two workers can both observe no run and then race
+            # on the business-key UNIQUE constraint.
+            c.execute("BEGIN IMMEDIATE")
             existing = c.execute(
                 "SELECT * FROM runs WHERE tenant_id=? AND left_batch=? AND right_batch=? AND rule=?",
                 (tenant, left, right, rule),
             ).fetchone()
             if existing:
                 return existing
-            c.execute("BEGIN IMMEDIATE")
             rid, jid, created = str(uuid.uuid4()), str(uuid.uuid4()), now()
-            c.execute(
-                "INSERT INTO runs(tenant_id,id,left_batch,right_batch,rule,status,job_id,unmatched,version,source_revision,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (tenant, rid, left, right, rule, "SUCCEEDED", jid, 0, 1, source_revision, created),
-            )
+            try:
+                c.execute(
+                    "INSERT INTO runs(tenant_id,id,left_batch,right_batch,rule,status,job_id,unmatched,version,source_revision,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (tenant, rid, left, right, rule, "SUCCEEDED", jid, 0, 1, source_revision, created),
+                )
+            except sqlite3.IntegrityError:
+                # A compatible schema may enforce the same key concurrently;
+                # return the committed winner rather than duplicating work.
+                existing = c.execute(
+                    "SELECT * FROM runs WHERE tenant_id=? AND left_batch=? AND right_batch=? AND rule=?",
+                    (tenant, left, right, rule),
+                ).fetchone()
+                if existing:
+                    return existing
+                raise
             left_rows, right_rows = self.rows(tenant, left), self.rows(tenant, right)
             used: set[str] = set()
             unmatched = 0
