@@ -10,17 +10,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: g2_only_disposable_password
-          POSTGRES_DB: forgeworks_g2
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d forgeworks_g2"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
       G2_DISPOSABLE_DB: 'yes'
       PGHOST: '127.0.0.1'
       PGPORT: '5438'
