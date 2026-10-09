@@ -141,5 +141,5 @@ class PostgresStore(Store):
 
 for name, method in inspect.getmembers(Store, predicate=inspect.isfunction):
     parameters = list(inspect.signature(method).parameters)
-    if len(parameters) > 1 and parameters[1] == "tenant" and name not in PostgresStore.__dict__:
+    if len(parameters) > 1 and parameters[1] == "tenant" and name not in PostgresStore.__dict__ and not isinstance(inspect.getattr_static(Store, name), staticmethod):
         setattr(PostgresStore, name, tenant_method(method))
