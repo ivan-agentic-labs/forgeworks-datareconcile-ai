@@ -1,10 +1,18 @@
 # DataReconcile AI
 
-**Status: GitHub G2 bootstrap candidate. Not implemented, not deployed, not production-ready.**
+**Status: synthetic MVP milestone implemented and tested locally. Not deployed, not production-ready, and G1-E remains open.**
 
 Deterministic transaction reconciliation, exceptions, approvals and auditability.
 
-This private repository contains the canonical G1 design and executable **verification scaffolding**, not functioning AI product code.
+The first executable slice imports synthetic rows, uses integer minor units, performs deterministic same-currency 1:1 matching, creates exceptions, records authorized resolutions, and finalizes an immutable report. It never transfers funds or uses floating-point amounts.
+
+## MVP run and test
+```bash
+python -m pip install -e 'apps/api[test]'
+RECONCILE_SEED_FIXTURE=1 PYTHONPATH=apps/api/src uvicorn datareconcile_ai.main:app --reload
+python -W error -m pytest tests/integration
+```
+The SQLite store and development issuer are test-only. See `docs/evidence/MVP_CHECKPOINT.md`.
 
 ## Documents
 - Product scope: `docs/product/PRODUCT_SCOPE.md`
