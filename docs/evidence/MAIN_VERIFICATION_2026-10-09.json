@@ -1,0 +1,50 @@
+{
+  "slug": "datareconcile-ai",
+  "source_sha": "206665d6d9937cd728f898411351938c074e8609",
+  "scope": "Exact source commit; synthetic/disposable evidence; G1-E remains open",
+  "runs": [
+    {
+      "name": "G1 Contract Verification",
+      "id": 37888180107,
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37888180107",
+      "head_sha": "206665d6d9937cd728f898411351938c074e8609",
+      "conclusion": "success"
+    },
+    {
+      "name": "DataReconcile MVP Application CI",
+      "id": 37888180062,
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37888180062",
+      "head_sha": "206665d6d9937cd728f898411351938c074e8609",
+      "conclusion": "success"
+    },
+    {
+      "name": "DataReconcile PostgreSQL Runtime Proof",
+      "id": 37888180057,
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37888180057",
+      "head_sha": "206665d6d9937cd728f898411351938c074e8609",
+      "conclusion": "success"
+    },
+    {
+      "name": "G2 Disposable PostgreSQL RLS Negative Test",
+      "id": 37888180056,
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37888180056",
+      "head_sha": "206665d6d9937cd728f898411351938c074e8609",
+      "conclusion": "success"
+    }
+  ],
+  "logs": [
+    {
+      "workflow": "DataReconcile MVP Application CI",
+      "observed": [
+        "======================== 32 passed, 1 skipped in 1.52s ========================="
+      ]
+    },
+    {
+      "workflow": "DataReconcile PostgreSQL Runtime Proof",
+      "observed": [
+        "1 passed in 0.70s",
+        "{\"check\": \"disposable logical restore and restored membership/RLS\", \"limits\": \"Not PITR, regional failover, production RTO/RPO or operational signoff\", \"result\": \"PASS\", \"rows\": 18, \"tables\": 10}"
+      ]
+    }
+  ]
+}

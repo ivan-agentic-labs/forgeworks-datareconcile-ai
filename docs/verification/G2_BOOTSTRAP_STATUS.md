@@ -1,12 +1,9 @@
-# G2 bootstrap status — 9 October 2026
+# G2 bootstrap status — 2026-10-09
 
-Owner: `ivan-agentic-labs`. Five independent private repositories are authorized.
-G1 owner design approval permits bootstrap; historical conditional review text remains baseline evidence. G1-E remains OPEN/BLOCKED until all required runtime evidence is accepted.
+Owner: `ivan-agentic-labs`. Repository bootstrap and scoped engineering verification are complete for the tested source receipt. Engineering now proceeds directly on main under the latest owner authorization. The repository remains private and independent.
 
-The audited source snapshot is `09b2628b53e1dd66c0b5fc80dc26323d4b558891`. Local static checks and the following bounded Actions evidence now exist: [contract/OpenAPI run 37877971633](https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37877971633), [application CI run 37877971788](https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37877971788), [empty disposable PostgreSQL DDL run 37877997433](https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37877997433), and [synthetic non-owner RLS negative run 37878000156](https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/37878000156). These runs are partial/synthetic evidence only: the RLS probe covers tenant visibility and cross-tenant INSERT rejection, not the full CRUD/reset/bypass/concurrency matrix.
+Current evidence and exact commit/run links: [CURRENT_GATE_EVIDENCE.md](CURRENT_GATE_EVIDENCE.md) and [main source receipt](../evidence/MAIN_VERIFICATION_2026-10-09.json). Historical receipts retain their original scope.
 
-Generated-client compilation, real IdP/OIDC and CSRF, browser sandbox/egress, external storage, legal/domain/operations/cost signoff, independent reviewer approval, and production backup/restore remain NOT RUN or BLOCKED. G1-D is not signed and G1-E is not closed.
+Contracts/client compilation, complete application tests, implemented PostgreSQL MVP runtime with negative RLS/concurrency checks and disposable logical restore have passed. These are scoped results; G1-E remains OPEN/BLOCKED. Real identities/BFF, external storage/source ingestion, sandbox/provider/product GitHub App effects, PITR/load/regional recovery and independent acceptance remain unfinished or blocked. No production deployment or customer data is used.
 
-APIShield is the first implementation priority AFTER remote bootstrap and CI verification. No production deployment or customer data is authorized.
-
-The PostgreSQL workflow uses an intentionally public, disposable localhost-only test password. This is not a production credential. Never reuse it outside the isolated test service.
+CI database credentials are intentionally synthetic and confined to fresh disposable localhost services.
