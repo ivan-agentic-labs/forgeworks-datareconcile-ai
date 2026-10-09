@@ -1,0 +1,38 @@
+name: G2 Disposable PostgreSQL RLS Negative Test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  rls-negative-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: g2_only_disposable_password
+          POSTGRES_DB: forgeworks_g2
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d forgeworks_g2"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      G2_DISPOSABLE_DB: 'yes'
+      PGHOST: '127.0.0.1'
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: g2_only_disposable_password
+      PGDATABASE: forgeworks_g2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install psql client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Execute role-based tenant isolation negative test
+        run: bash scripts/probe_disposable_postgres_rls.sh

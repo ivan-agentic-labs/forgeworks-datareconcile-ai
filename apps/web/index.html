@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ForgeWorks DataReconcile AI</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">FORGEWORKS / DATARECONCILE AI</p>
+        <h1>Evidence-first reconciliation workspace</h1>
+        <p class="lede">A static operator console for deterministic imports, matching, review, and immutable reporting.</p>
+      </div>
+      <div class="boundary" role="note"><strong>No-transfer boundary</strong><span>This product only reconciles and reports. It never initiates, approves, or executes a financial transfer.</span></div>
+    </header>
+
+    <section class="panel connection" aria-labelledby="connection-title">
+      <div class="section-heading"><div><p class="kicker">01 / SESSION</p><h2 id="connection-title">Connect to the API</h2></div><span id="health" class="status">Not checked</span></div>
+      <div class="grid three">
+        <label>API base URL<input id="baseUrl" value="http://localhost:8000" autocomplete="url"></label>
+        <label>Bearer token<input id="token" type="password" placeholder="Paste a synthetic token" autocomplete="off"></label>
+        <button id="healthButton" class="secondary">Check health</button>
+      </div>
+      <p class="hint">The token is kept in memory only. Use synthetic fixtures; never paste production credentials or financial data.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="import-title">
+      <div class="section-heading"><div><p class="kicker">02 / INGEST</p><h2 id="import-title">Register import batches</h2></div><span class="tag">integer minor units</span></div>
+      <form id="importForm">
+        <div class="grid four">
+          <label>Side<select id="importSide"><option value="left">Left / source A</option><option value="right">Right / source B</option></select></label>
+          <label>Source label<input id="sourceLabel" value="left-fixture" required maxlength="200"></label>
+          <label>Currency<input id="currency" value="USD" pattern="[A-Z]{3}" maxlength="3" required></label>
+          <label>File SHA-256<input id="fileSha" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" pattern="[0-9a-f]{64}" required></label>
+        </div>
+        <div class="grid two">
+          <label>Artifact UUID<input id="artifactId" value="33333333-3333-3333-3333-333333333333" required></label>
+          <label>Profile version<input id="profileVersion" value="strict-v1" required></label>
+        </div>
+        <label>Optional synthetic CSV content<textarea id="csvContent" rows="3" placeholder="external_ref,currency,amount_minor,occurred_at&#10;fixture-1,USD,100,2026-01-01T00:00:00Z"></textarea></label>
+        <button class="primary" type="submit">Register import</button>
+      </form>
+      <div id="batchList" class="entity-list" aria-live="polite"><p class="empty">No batches registered in this session.</p></div>
+    </section>
+
+    <section class="panel" aria-labelledby="reconcile-title">
+      <div class="section-heading"><div><p class="kicker">03 / RECONCILE</p><h2 id="reconcile-title">Match and inspect exceptions</h2></div><span id="runStatus" class="status">No run</span></div>
+      <form id="reconcileForm">
+        <div class="grid three">
+          <label>Left batch ID<input id="leftBatchId" placeholder="Filled after import" required></label>
+          <label>Right batch ID<input id="rightBatchId" placeholder="Filled after import" required></label>
+          <label>Rule version<input id="ruleVersion" value="exact-1to1-v1" required></label>
+        </div>
+        <button class="primary" type="submit">Start reconciliation</button>
+      </form>
+      <p class="hint"><strong>Conservation totals</strong> are shown below in integer minor units after rows or a report are loaded.</p>
+      <div class="actions"><button id="rowsButton" class="secondary" disabled>Load rows</button><button id="exceptionsButton" class="secondary" disabled>Load exceptions</button></div>
+      <div id="rowSummary" class="data-grid" aria-live="polite"></div>
+      <div id="exceptionList" class="entity-list" aria-live="polite"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="review-title">
+      <div class="section-heading"><div><p class="kicker">04 / REVIEW</p><h2 id="review-title">Resolve, finalize, report</h2></div><span class="tag">stale writes fail closed</span></div>
+      <div class="review-grid">
+        <form id="resolveForm" class="subpanel">
+          <h3>Resolve an exception</h3>
+          <label>Exception ID<input id="exceptionId" placeholder="Load exceptions first" required></label>
+          <label>Decision<select id="decision"><option value="accept-as-investigated">accept-as-investigated</option><option value="reject">reject</option><option value="accept-as-refund">accept-as-refund</option><option value="accept-as-reversal">accept-as-reversal</option></select></label>
+          <label>Evidence SHA-256<input id="evidenceSha" value="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" pattern="[0-9a-f]{64}" required></label>
+          <label>Expected exception version<input id="exceptionVersion" type="number" min="1" value="1" required></label>
+          <button class="primary" type="submit">Record resolution</button>
+          <p class="hint">If another reviewer already changed this exception, the API returns <code>STALE_VERSION</code>; refresh before retrying.</p>
+        </form>
+        <form id="finalizeForm" class="subpanel">
+          <h3>Finalize immutable report</h3>
+          <label>Expected run version<input id="runVersion" type="number" min="1" value="1" required></label>
+          <label>Approved summary SHA-256<input id="summarySha" value="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" pattern="[0-9a-f]{64}" required></label>
+          <button class="primary" type="submit">Finalize report</button>
+          <p class="hint">Finalization is blocked while exceptions are open and proves allocated-left equals allocated-right.</p>
+          <div id="reportBox" class="report" aria-live="polite"><p class="empty">No report finalized.</p></div>
+        </form>
+      </div>
+    </section>
+
+    <aside id="message" class="message" role="status" aria-live="polite"></aside>
+    <footer>Demo console · all amounts shown as integer minor units · reconciliation is not settlement</footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
