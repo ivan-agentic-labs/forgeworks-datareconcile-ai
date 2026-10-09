@@ -269,7 +269,7 @@ def create_app(db_path=None, seed=False):
         if not row:
             return reject(404, "RESOURCE_NOT_FOUND", "Job is not visible")
         return {
-            "id": row["job_id"], "kind": "reconciliation", "state": row["status"],
+            "id": row["job_id"], "kind": "reconciliation", "state": "SUCCEEDED" if row["status"] == "FINALIZED" else row["status"],
             "created_at": row["created_at"], "state_version": row["version"],
             "attempt_count": 1, "last_error_code": None,
         }

@@ -29,6 +29,7 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
     info.update(user='fw_runtime_test',password='synthetic-local-runtime-test-only');runtime=make_conninfo(**info)
     with pytest.raises(ValueError,match='superuser'):PostgresStore(owner)
     store=PostgresStore(runtime)
+    assert not store.member(TENANT, "unmapped-oidc-subject")
     assert store.member(TENANT,USER) and not store.member(other,USER)
     header='external_ref,currency,amount_minor,occurred_at\n'
     left=header+'l1,USD,100,2026-01-01T00:00:00Z\n'
@@ -75,4 +76,4 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
         assert downloaded.status_code==200
         assert hashlib.sha256(downloaded.content).hexdigest()==report['artifact_sha']
         job=client.get(f"/v1/jobs/{store.get_run(TENANT,rid)['job_id']}",headers=h('job:read'))
-        assert job.status_code==200 and job.json()['state']=='FINALIZED'
+        assert job.status_code==200 and job.json()['state']=='SUCCEEDED'

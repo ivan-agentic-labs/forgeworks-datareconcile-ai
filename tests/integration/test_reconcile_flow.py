@@ -17,6 +17,12 @@ def test_match_exception_resolve_finalize(tmp_path):
   res=c.post(f"/v1/exceptions/{ex['id']}/resolutions",headers=h('exception:approve'),json={'decision':'accept-as-investigated','evidence_sha256':'d'*64,'expected_version':1});assert res.status_code==201
   report=c.post(f"/v1/reconciliation-runs/{run['id']}/finalize",headers=h('report:finalize'),json={'expected_version':1,'approved_summary_sha256':'c'*64});assert report.status_code==201
   link=c.get(f"/v1/reports/{report.json()['id']}/download",headers=h('report:read'));assert link.status_code==200
+  job=c.get(f"/v1/jobs/{run['job_id']}",headers=h('job:read'));assert job.status_code==200
+  import yaml,jsonschema
+  from pathlib import Path
+  contract=yaml.safe_load((Path(__file__).resolve().parents[2]/'contracts/openapi.yaml').read_text())
+  jsonschema.Draft202012Validator({**contract,'$ref':'#/components/schemas/JobStatus'}).validate(job.json())
+  assert job.json()['state']=='SUCCEEDED'
   duplicate=c.post('/v1/import-batches',headers=h('import:create'),json={**common,'source_label':'left-fixture','file_sha256':'a'*64});assert duplicate.status_code==409
 
 def test_cross_currency_and_auth_fail_closed(tmp_path):
@@ -26,3 +32,4 @@ def test_cross_currency_and_auth_fail_closed(tmp_path):
   a=c.post('/v1/import-batches',headers=h('import:create'),json={**common,'currency':'USD'}).json();b=c.post('/v1/import-batches',headers=h('import:create'),json={**common,'currency':'EUR','file_sha256':'f'*64}).json()
   assert c.post('/v1/reconciliation-runs',headers=h('reconcile:run'),json={'left_batch_id':a['id'],'right_batch_id':b['id'],'rule_version':'exact'}).status_code==409
   assert c.post('/v1/import-batches',headers=h('report:read'),json={**common,'currency':'USD','file_sha256':'1'*64}).status_code==403
+
