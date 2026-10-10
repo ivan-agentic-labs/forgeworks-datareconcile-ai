@@ -41,3 +41,19 @@ The Railway GitHub App is installed on ivan-agentic-labs with access limited to 
 The image includes the official Supabase Root 2021 CA. Configure `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt` alongside the database URL with `sslmode=verify-full&sslrootcert=system`. The bundled psycopg OpenSSL runtime needs this explicit trust-store path. The certificate was downloaded from the project dashboard link, has SHA-256 fingerprint `807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa`, and expires 2031-04-26. Review CA rotation before expiration.
 
 See `docs/evidence/STAGING_DEPLOYMENT_2026-10-10.json` for deployment IDs, source and CI receipts, live smoke checks, and remaining limitations. The earlier checkpoint records the resolved repository-access blocker and is retained as historical evidence. Positive authenticated workflows and user session revocation still require provisioned test identities and have not been accepted.
+
+## Remaining FK index rollout (2026-10-11)
+
+`007_remaining_fk_indexes.sql` adds tenant-prefixed indexes for referencing
+foreign keys not covered by existing primary/unique/lookup indexes. The tables
+in connected staging are small (each below 128 KiB at review). Apply using the
+migration role, the product's private `search_path`, and a single transaction.
+Lock and statement timeouts bound this small-table rollout. For a populated
+production deployment, separately assess write overhead and use a reviewed
+concurrent-index procedure; this staging script is not a production benchmark.
+
+The disposable runtime proof executes the migration twice and verifies exact
+index definitions, followed by the existing business-flow and RLS negatives.
+Do not drop unused indexes merely to remove advisor INFO notices. Rollback is
+limited to the newly named indexes after query-plan review; it requires no
+row, membership, constraint, grant or tenant-policy changes.
