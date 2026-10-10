@@ -133,9 +133,19 @@ class WorkerJobRunner:
             return self.status(job_key)  # type: ignore[return-value]
 
         try:
-            encoded = json.dumps(value, separators=(",", ":"))
-        except (TypeError, ValueError):
-            encoded = json.dumps(str(value))
+            encoded = json.dumps(value, separators=(",", ":"), allow_nan=False)
+            if len(encoded.encode("utf-8")) > 1_048_576:
+                raise ValueError("RESULT_SIZE_BUDGET_EXCEEDED")
+        except (TypeError, ValueError, OverflowError, UnicodeError):
+            # Never convert an invalid result to str(value) and report success.
+            # Downstream finance consumers require the original JSON shape.
+            with self._conn() as db:
+                db.execute(
+                    "UPDATE worker_jobs SET state='FAILED_TERMINAL',last_error_code=?,result_json=NULL "
+                    "WHERE job_key=? AND state='RUNNING'",
+                    ("RESULT_SERIALIZATION_INVALID", job_key),
+                )
+            return self.status(job_key)  # type: ignore[return-value]
         with self._conn() as db:
             db.execute(
                 "UPDATE worker_jobs SET state='SUCCEEDED',last_error_code=NULL,result_json=? WHERE job_key=? AND state='RUNNING'",
