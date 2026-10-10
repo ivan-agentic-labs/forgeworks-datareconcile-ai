@@ -21,6 +21,9 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
         if db.execute("SELECT to_regclass('import_batches')").fetchone()[0]:pytest.fail('Proof requires a fresh empty database')
         for name in ['001_reconcile_mvp.sql','002_reconcile_runtime.sql','003_source_artifact_ingestion.sql','004_artifact_immutability.sql']:
             db.execute((root/'migrations/versions'/name).read_text())
+        db.execute((root/'infra/environments/staging/003_exception_run_lookup_index.sql').read_text())
+        index_definition = db.execute("SELECT pg_get_indexdef('idx_exception_cases_tenant_run'::regclass)").fetchone()[0]
+        assert 'exception_cases USING btree (tenant_id, run_id)' in index_definition
         db.execute("CREATE ROLE fw_runtime_test LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'synthetic-local-runtime-test-only'")
         db.execute('GRANT fw_datareconcile_ai_rw TO fw_runtime_test')
         db.execute('INSERT INTO tenants VALUES(%s,%s,%s)',(TENANT,'synthetic-demo','ACTIVE'))
