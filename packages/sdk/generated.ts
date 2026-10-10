@@ -228,10 +228,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reports/{id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_report_signature"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ReportAttestation: {
+            /** @constant */
+            algorithm: "Ed25519";
+            key_sha256: string;
+            signed_payload: string;
+            signed_payload_sha256: string;
+            signature: string;
+        };
         ImportBatch: {
             /** Format: uuid */
             id: string;
@@ -1725,6 +1749,56 @@ export interface operations {
             };
             /** @description Integrity failure or missing bytes */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_report_signature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ed25519 attestation of immutable report bytes and tenant/report binding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportAttestation"];
+                };
+            };
+            /** @description Missing scope or membership */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Report not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stored report bytes failed integrity or budget checks */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Explicit Ed25519 signing key unavailable or invalid */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

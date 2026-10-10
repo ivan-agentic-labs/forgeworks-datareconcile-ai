@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datareconcile_ai.infrastructure.report_downloads import issue_download, verify_download
+from datareconcile_ai.domain.report_signatures import attest_report, ReportSignatureError
 from datareconcile_ai.presentation.authentication import decode_bearer, verify_session
 
 import os
@@ -312,6 +313,18 @@ def create_app(db_path=None, seed=False):
         if status == "CONSERVATION_FAILED":
             return reject(409, "CONSERVATION_FAILED", "The report has no valid conservation proof")
         return _report_response(report)
+
+    @app.get("/v1/reports/{rid}/signature")
+    def report_signature(rid: UUID, c=Depends(scope("report:read", store))):
+        report = store.report(c["tenant_id"], str(rid))
+        if not report:
+            reject(404, "RESOURCE_NOT_FOUND", "Report is not visible")
+        try:
+            envelope = attest_report(report, c["tenant_id"], os.getenv("RECONCILE_REPORT_SIGNING_KEY_PEM", ""))
+        except ReportSignatureError as error:
+            code = str(error)
+            reject(503 if code == "REPORT_SIGNING_KEY_UNAVAILABLE" else 409, code, "Report attestation is unavailable")
+        return JSONResponse(envelope, headers={"Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"})
 
     @app.get("/v1/reports/{rid}/download")
     def download(rid: UUID, c=Depends(scope("report:read", store))):

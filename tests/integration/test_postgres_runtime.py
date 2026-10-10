@@ -118,5 +118,16 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
         downloaded=client.get(response.json()['download_url'])
         assert downloaded.status_code==200
         assert hashlib.sha256(downloaded.content).hexdigest()==report['artifact_sha']
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from datareconcile_ai.domain.report_signatures import verify_report_attestation
+        signing_key = Ed25519PrivateKey.generate()
+        private = signing_key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()).decode()
+        public = signing_key.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+        monkeypatch.setenv('RECONCILE_REPORT_SIGNING_KEY_PEM',private)
+        signed = client.get(f"/v1/reports/{report['id']}/signature",headers=h('report:read'))
+        assert signed.status_code == 200, signed.text
+        payload = verify_report_attestation(signed.json(),public,{'tenant_id':TENANT,'report_id':report['id'],'run_id':rid,'artifact_sha256':report['artifact_sha']})
+        assert payload['report_json'].encode() == downloaded.content
         job=client.get(f"/v1/jobs/{store.get_run(TENANT,rid)['job_id']}",headers=h('job:read'))
         assert job.status_code==200 and job.json()['state']=='SUCCEEDED'

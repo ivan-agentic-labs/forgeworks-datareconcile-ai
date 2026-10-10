@@ -1027,6 +1027,35 @@ paths:
           description: Invalid or expired capability
         '409':
           description: Integrity failure or missing bytes
+  /v1/reports/{id}/signature:
+    get:
+      operationId: get_report_signature
+      security:
+      - BearerAuth: []
+      x-required-scope: report:read
+      x-idempotent-command: false
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Ed25519 attestation of immutable report bytes and tenant/report binding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportAttestation'
+        '403':
+          description: Missing scope or membership
+        '404':
+          description: Report not visible
+        '409':
+          description: Stored report bytes failed integrity or budget checks
+        '503':
+          description: Explicit Ed25519 signing key unavailable or invalid
 components:
   securitySchemes:
     BearerAuth:
@@ -1039,6 +1068,27 @@ components:
       name: token
       description: Short-lived HMAC capability bound to tenant, report and digest; issued after report:read authorization.
   schemas:
+    ReportAttestation:
+      type: object
+      additionalProperties: false
+      required: [algorithm, key_sha256, signed_payload, signed_payload_sha256, signature]
+      properties:
+        algorithm:
+          type: string
+          const: Ed25519
+        key_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        signed_payload:
+          type: string
+          maxLength: 2097152
+        signed_payload_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        signature:
+          type: string
+          minLength: 88
+          maxLength: 88
     ImportBatch:
       type: object
       additionalProperties: false
