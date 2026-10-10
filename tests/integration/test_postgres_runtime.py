@@ -24,6 +24,9 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
         db.execute((root/'infra/environments/staging/003_exception_run_lookup_index.sql').read_text())
         index_definition = db.execute("SELECT pg_get_indexdef('idx_exception_cases_tenant_run'::regclass)").fetchone()[0]
         assert 'exception_cases USING btree (tenant_id, run_id)' in index_definition
+        db.execute((root/'infra/environments/staging/004_tenant_rls_initplan.sql').read_text())
+        policy = db.execute("SELECT qual, with_check FROM pg_policies WHERE schemaname=current_schema() AND tablename='import_batches' AND policyname='import_batches_tenant'").fetchone()
+        assert policy and all('SELECT current_setting' in expression for expression in policy)
         db.execute("CREATE ROLE fw_runtime_test LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'synthetic-local-runtime-test-only'")
         db.execute('GRANT fw_datareconcile_ai_rw TO fw_runtime_test')
         db.execute('INSERT INTO tenants VALUES(%s,%s,%s)',(TENANT,'synthetic-demo','ACTIVE'))
