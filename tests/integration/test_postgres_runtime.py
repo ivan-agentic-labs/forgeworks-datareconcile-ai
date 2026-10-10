@@ -25,6 +25,12 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
         index_definition = db.execute("SELECT pg_get_indexdef('idx_exception_cases_tenant_run'::regclass)").fetchone()[0]
         assert 'exception_cases USING btree (tenant_id, run_id)' in index_definition
         db.execute((root/'infra/environments/staging/004_tenant_rls_initplan.sql').read_text())
+        db.execute((root/'infra/environments/staging/005_remaining_tenant_rls_initplans.sql').read_text())
+        for table, policy_name in [['allocations','tenant_boundary'],['audit_events','tenant_boundary'],['exception_cases','exception_cases_tenant'],['import_rows','import_rows_tenant'],['memberships','tenant_boundary'],['reconcile_runs','reconcile_runs_tenant'],['reports','reports_tenant'],['resolutions','tenant_boundary'],['source_artifact_commands','tenant_boundary'],['source_artifacts','tenant_boundary']]:
+            row = db.execute("SELECT qual, with_check, cmd, roles FROM pg_policies WHERE schemaname=current_schema() AND tablename=%s AND policyname=%s", (table, policy_name)).fetchone()
+            assert row and row[2] == 'ALL' and row[3] == ['public']
+            assert all('SELECT current_setting' in clause for clause in row[:2])
+
         policy = db.execute("SELECT qual, with_check FROM pg_policies WHERE schemaname=current_schema() AND tablename='import_batches' AND policyname='import_batches_tenant'").fetchone()
         assert policy and all('SELECT current_setting' in expression for expression in policy)
         db.execute("CREATE ROLE fw_runtime_test LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'synthetic-local-runtime-test-only'")
