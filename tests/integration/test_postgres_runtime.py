@@ -33,6 +33,21 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
 
         policy = db.execute("SELECT qual, with_check FROM pg_policies WHERE schemaname=current_schema() AND tablename='import_batches' AND policyname='import_batches_tenant'").fetchone()
         assert policy and all('SELECT current_setting' in expression for expression in policy)
+        # Run twice to prove replay safety, then inspect actual catalog definitions.
+        for _ in range(2):
+            db.execute((root/'infra/environments/staging/007_remaining_fk_indexes.sql').read_text())
+        definition = db.execute("SELECT pg_get_indexdef('idx_allocations_tenant_left'::regclass)").fetchone()[0]
+        assert 'allocations USING btree (tenant_id, left_id)' in definition
+        definition = db.execute("SELECT pg_get_indexdef('idx_allocations_tenant_right'::regclass)").fetchone()[0]
+        assert 'allocations USING btree (tenant_id, right_id)' in definition
+        definition = db.execute("SELECT pg_get_indexdef('idx_exception_cases_tenant_left_transaction'::regclass)").fetchone()[0]
+        assert 'exception_cases USING btree (tenant_id, left_transaction_id)' in definition
+        definition = db.execute("SELECT pg_get_indexdef('idx_exception_cases_tenant_right_transaction'::regclass)").fetchone()[0]
+        assert 'exception_cases USING btree (tenant_id, right_transaction_id)' in definition
+        definition = db.execute("SELECT pg_get_indexdef('idx_reconcile_runs_tenant_right_batch'::regclass)").fetchone()[0]
+        assert 'reconcile_runs USING btree (tenant_id, right_batch_id)' in definition
+        definition = db.execute("SELECT pg_get_indexdef('idx_source_artifact_commands_tenant_artifact'::regclass)").fetchone()[0]
+        assert 'source_artifact_commands USING btree (tenant_id, artifact_id)' in definition
         db.execute("CREATE ROLE fw_runtime_test LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'synthetic-local-runtime-test-only'")
         db.execute('GRANT fw_datareconcile_ai_rw TO fw_runtime_test')
         db.execute('INSERT INTO tenants VALUES(%s,%s,%s)',(TENANT,'synthetic-demo','ACTIVE'))
