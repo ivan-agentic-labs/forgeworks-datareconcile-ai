@@ -1,0 +1,12 @@
+-- Optimize ten existing ALL / TO PUBLIC tenant policies with identical equality.
+-- Staging migration search_path=fw_datareconcile_ai,pg_catalog.
+ALTER POLICY tenant_boundary ON allocations USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY tenant_boundary ON audit_events USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY exception_cases_tenant ON exception_cases USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY import_rows_tenant ON import_rows USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY tenant_boundary ON memberships USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY reconcile_runs_tenant ON reconcile_runs USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY reports_tenant ON reports USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY tenant_boundary ON resolutions USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY tenant_boundary ON source_artifact_commands USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
+ALTER POLICY tenant_boundary ON source_artifacts USING (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid) WITH CHECK (tenant_id = NULLIF((SELECT current_setting('app.tenant_id', true)), '')::uuid);
