@@ -169,3 +169,26 @@ def test_finalized_report_is_immutable_and_conserves_allocated_minor_units(tmp_p
     assert same_report["approved_summary_sha"] == "c" * 64
     with store.conn() as db:
         assert db.execute("SELECT COUNT(*) FROM reports WHERE tenant_id=? AND run_id=?", (TENANT, run["id"])).fetchone()[0] == 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [object(), {"score": float("nan")}, {"payload": "x" * (1024 * 1024)}],
+    ids=["unsupported-object", "nonfinite-number", "oversized-result"],
+)
+def test_worker_rejects_invalid_result_instead_of_forging_success(tmp_path, payload):
+    runner = WorkerJobRunner(str(tmp_path / "invalid-result.db"))
+    key = "reconcile:invalid-result"
+    invalid = runner.run(key, lambda: payload)
+    assert invalid.state == "FAILED_TERMINAL"
+    assert invalid.last_error_code == "RESULT_SERIALIZATION_INVALID"
+    assert invalid.value is None and invalid.attempt_count == 1
+    assert runner.run(key, lambda: {"unexpected": True}) == invalid
+
+
+def test_worker_preserves_valid_json_shape(tmp_path):
+    runner = WorkerJobRunner(str(tmp_path / "valid-result.db"))
+    value = {"matched": [1, 2], "conservation_ok": True}
+    result = runner.run("reconcile:valid", lambda: value)
+    assert result.state == "SUCCEEDED"
+    assert result.value == value
