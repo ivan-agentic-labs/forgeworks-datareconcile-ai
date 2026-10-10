@@ -41,6 +41,8 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
     info.update(user='fw_runtime_test',password='synthetic-local-runtime-test-only');runtime=make_conninfo(**info)
     with pytest.raises(ValueError,match='superuser'):PostgresStore(owner)
     store=PostgresStore(runtime)
+    assert store.member_role(TENANT, USER) == 'editor'
+    assert store.member_role(TENANT, 'not-a-uuid') is None
     with pytest.raises(StoreValidationError) as missing_source:
         store.batch(TENANT,'metadata-only','a'*64,'USD')
     assert missing_source.value.code=='SOURCE_BYTES_REQUIRED'

@@ -20,6 +20,8 @@ from datareconcile_ai.infrastructure.artifact_ingestion import ArtifactIngestion
 
 from datareconcile_ai.presentation.body_budget import BodyBudgetMiddleware
 
+from datareconcile_ai.presentation.role_policy import role_scope_allowed
+
 ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -98,8 +100,13 @@ def scope(required: str, store: Store):
         verify_session(store, c)
         # Tenant context is derived only from the verified token and membership;
         # no request body/path value can widen the authorization scope.
-        if not c.get("tenant_id") or not c.get("sub") or not store.member(c["tenant_id"], c["sub"]):
+        if not c.get("tenant_id") or not c.get("sub"):
             reject(403, "TENANT_CONTEXT_INVALID", "Verified membership is required")
+        role = store.member_role(c["tenant_id"], c["sub"])
+        if role is None:
+            reject(403, "TENANT_CONTEXT_INVALID", "Verified membership is required")
+        if not role_scope_allowed(role, required):
+            reject(403, "ROLE_FORBIDDEN", "Membership role cannot perform this operation")
         if required not in set(str(c.get("scope", "")).split()):
             reject(403, "INSUFFICIENT_SCOPE", f"Scope {required} is required")
         return c
