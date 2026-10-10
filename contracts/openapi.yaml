@@ -1340,6 +1340,9 @@ components:
         currency:
           type: string
           pattern: ^[A-Z]{3}$
+        row_partition_valid:
+          type: boolean
+          description: Every source row appears once in allocations or exceptions with valid batch and amount bindings.
         proof:
           type: string
     CreateImportRequest:

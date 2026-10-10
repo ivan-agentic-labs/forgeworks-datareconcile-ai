@@ -396,6 +396,7 @@ class Store:
             used: set[str] = set()
             unmatched = 0
             matched = 0
+            pending_left = []
             for a in left_rows:
                 candidates = right_candidates[(a["currency"], a["amount_minor"], a["transaction_type"])]
                 match = candidates.popleft() if candidates else None
@@ -407,7 +408,12 @@ class Store:
                         (tenant, str(uuid.uuid4()), rid, a["id"], match["id"], rule, a["amount_minor"], a["currency"]),
                     )
                     continue
-                candidate = next((b for b in right_rows if b["id"] not in used), None)
+                pending_left.append(a)
+            # Reserve all exact matches before assigning rows to exceptions.
+            # A mismatch encountered earlier must not consume a later exact match.
+            remaining_right = deque(b for b in right_rows if b["id"] not in used)
+            for a in pending_left:
+                candidate = remaining_right.popleft() if remaining_right else None
                 if candidate:
                     used.add(candidate["id"])
                     reason, right_id = "AMOUNT_MISMATCH", candidate["id"]
@@ -493,6 +499,35 @@ class Store:
             })
             return resolution_id, "OK"
 
+    def partition_valid(self, tenant: str, rid: str) -> bool:
+        """Every source row occurs once in allocations or exceptions, never both."""
+        run = self.get_run(tenant, rid)
+        if not run:
+            return False
+        with self.conn() as c:
+            left = {row["id"]: row for row in c.execute("SELECT * FROM rows_ WHERE tenant_id=? AND batch_id=?", (tenant, run["left_batch"])).fetchall()}
+            right = {row["id"]: row for row in c.execute("SELECT * FROM rows_ WHERE tenant_id=? AND batch_id=?", (tenant, run["right_batch"])).fetchall()}
+            allocations = c.execute("SELECT * FROM allocations WHERE tenant_id=? AND run_id=?", (tenant, rid)).fetchall()
+            exceptions = c.execute("SELECT * FROM exceptions WHERE tenant_id=? AND run_id=?", (tenant, rid)).fetchall()
+        seen_left, seen_right = [], []
+        for allocation in allocations:
+            a, b = left.get(allocation["left_id"]), right.get(allocation["right_id"])
+            if not a or not b or any(a[key] != b[key] for key in ("amount_minor", "currency", "transaction_type")):
+                return False
+            if allocation["matched_amount_minor"] != a["amount_minor"] or allocation["currency"] != a["currency"] or allocation["rule"] != run["rule"]:
+                return False
+            seen_left.append(a["id"]); seen_right.append(b["id"])
+        for exception in exceptions:
+            a, b = exception["left_id"], exception["right_id"]
+            if a is None and b is None or a is not None and a not in left or b is not None and b not in right:
+                return False
+            if a is not None: seen_left.append(a)
+            if b is not None: seen_right.append(b)
+        return (len(exceptions) == run["unmatched"]
+                and len(seen_left) == len(set(seen_left)) == len(left)
+                and len(seen_right) == len(set(seen_right)) == len(right)
+                and set(seen_left) == set(left) and set(seen_right) == set(right))
+
     def totals(self, tenant: str, rid: str) -> dict[str, object] | None:
         run = self.get_run(tenant, rid)
         if not run:
@@ -525,6 +560,7 @@ class Store:
                 "open_exception_count": int(open_count),
                 "rejected_exception_count": int(rejected_count),
                 "currency": self.get_batch(tenant, run["left_batch"])["currency"],
+                "row_partition_valid": self.partition_valid(tenant, rid),
                 "proof": "allocated-left-equals-allocated-right-and-each-source-used-at-most-once",
             }
 
@@ -548,6 +584,8 @@ class Store:
             ).fetchone()[0]
             if duplicate:
                 return run, "ALLOCATION_NOT_UNIQUE"
+            if not self.partition_valid(tenant, rid):
+                return run, "CONSERVATION_FAILED"
             totals = self.totals(tenant, rid)
             if not totals or totals["allocated_total_minor"] < 0 and totals["matched_count"] == 0:
                 return run, "CONSERVATION_FAILED"

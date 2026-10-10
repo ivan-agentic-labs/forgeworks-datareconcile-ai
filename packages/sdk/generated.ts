@@ -348,6 +348,8 @@ export interface components {
             open_exception_count: number;
             rejected_exception_count?: number;
             currency: string;
+            /** @description Every source row appears once in allocations or exceptions with valid batch and amount bindings. */
+            row_partition_valid?: boolean;
             proof: string;
         };
         CreateImportRequest: {
