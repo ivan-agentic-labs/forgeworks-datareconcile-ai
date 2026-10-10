@@ -18,6 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from datareconcile_ai.infrastructure.store import Store, StoreValidationError
 from datareconcile_ai.infrastructure.artifact_ingestion import ArtifactIngestion, MAX_BYTES
 
+from datareconcile_ai.presentation.body_budget import BodyBudgetMiddleware
+
 ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -149,6 +151,7 @@ def create_app(db_path=None, seed=False):
     if seed:
         store.seed()
     app = FastAPI(title="DataReconcile AI MVP", version="0.2.0")
+    app.add_middleware(BodyBudgetMiddleware)
     app.state.store = store
     artifacts = ArtifactIngestion(store)
 
