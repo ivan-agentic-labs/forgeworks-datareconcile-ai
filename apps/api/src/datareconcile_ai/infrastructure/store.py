@@ -189,6 +189,15 @@ class Store:
             )
         self.allow_fixture_imports = True
 
+    def member_role(self, tenant: str, user: str) -> str | None:
+        """Read current ACTIVE member role without trusting JWT-supplied role."""
+        with self.conn() as db:
+            row = db.execute(
+                "SELECT role FROM memberships WHERE tenant_id=? AND user_id=? AND status='ACTIVE'",
+                (tenant, user),
+            ).fetchone()
+            return str(row["role"]) if row else None
+
     def member(self, tenant: str, user: str) -> bool:
         with self.conn() as c:
             return c.execute(
