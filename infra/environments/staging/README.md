@@ -36,7 +36,7 @@ Keep the private database schemas intact when rolling back the app. Select an ea
 
 ## Current platform checkpoint
 
-The Railway GitHub App is installed on ivan-agentic-labs with access limited to the five ForgeWorks repositories. All five services reached terminal SUCCESS in the staging environment on 2026-10-10 (Asia/Jakarta). Their source is pinned to the recorded application commit; new pushes do not automatically deploy.
+The Railway GitHub App is installed on ivan-agentic-labs with access limited to the five ForgeWorks repositories. All five services reached terminal SUCCESS in the staging environment on 2026-10-10 (Asia/Jakarta). The 2026-10-10 receipt was pinned then; as of 2026-10-11 services track `main` and a push may deploy before CI completes. Railway Wait for CI has not been enabled through the available integration. Use green PR checks before merging and independently verify staging.
 
 The image includes the official Supabase Root 2021 CA. Configure `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt` alongside the database URL with `sslmode=verify-full&sslrootcert=system`. The bundled psycopg OpenSSL runtime needs this explicit trust-store path. The certificate was downloaded from the project dashboard link, has SHA-256 fingerprint `807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa`, and expires 2031-04-26. Review CA rotation before expiration.
 
