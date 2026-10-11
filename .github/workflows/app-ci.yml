@@ -15,6 +15,10 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: {python-version: '3.12'}
       - run: python -m pip install -e 'apps/api[test]' -r scripts/requirements-verification.txt
+      - name: Install pinned browser verification runtime
+        run: python -m pip install playwright==1.63.0 && python -m playwright install chromium
+      - name: Verify exact integer transport in real Chromium
+        run: python scripts/probe_browser_integer_precision.py
       - run: python -W error -m pytest tests
       - run: python scripts/verify_bootstrap.py && python scripts/verify_contracts.py && python scripts/validate_openapi_independent.py
       - run: bash -n scripts/probe_disposable_postgres.sh
@@ -23,7 +27,7 @@ jobs:
         with:
           node-version: '22'
       - name: Verify browser session concurrency
-        run: node --test tests/web/auth_session.test.cjs
+        run: node --test tests/web/*.test.cjs
       - name: Generate and compile contract client
         run: |
           npm ci --prefix packages/sdk

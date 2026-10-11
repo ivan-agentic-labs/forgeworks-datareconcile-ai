@@ -9,6 +9,7 @@ function key() { return `${Date.now()}-${crypto.randomUUID()}`.slice(0, 64); }
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 function text(tag, value, className = '') { const el = document.createElement(tag); el.textContent = String(value); if (className) el.className = className; return el; }
 function formatInteger(value) {
+  if (typeof value === 'number' && !Number.isSafeInteger(value)) throw new Error('UNSAFE_INTEGER');
   const raw = BigInt(String(value));
   const sign = raw < 0n ? '-' : '';
   const digits = (raw < 0n ? -raw : raw).toString();
@@ -19,10 +20,22 @@ function appendMetric(container, label, value) {
   metric.append(text('small', label), text('strong', formatInteger(value)));
   container.append(metric);
 }
+function parseApiJson(source) {
+  return JSON.parse(source, (key, value, context) => {
+    if (typeof value !== 'number') return value;
+    if (!Number.isFinite(value)) throw new Error('NON_FINITE_JSON_NUMBER');
+    if (Number.isSafeInteger(value) || !Number.isInteger(value)) return value;
+    // The original token must be used before any rounded Number conversion.
+    if (!context || !/^-?(0|[1-9]\d*)$/.test(context.source)) throw new Error('UNSAFE_JSON_NUMBER');
+    return context.source;
+  });
+}
 async function api(path, options = {}) {
   const headers = { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(token() ? { Authorization: `Bearer ${token()}` } : {}), ...(options.headers || {}) };
   const response = await fetch(`${base()}${path}`, { ...options, headers });
-  const body = await response.json().catch(() => ({}));
+  let body;
+  try { body = parseApiJson(await response.text()); }
+  catch (error) { if (response.ok) throw error; body = {}; }
   if (!response.ok) { const error = new Error(body.detail || body.title || `HTTP ${response.status}`); error.code = body.code || ''; error.status = response.status; throw error; }
   return body;
 }
