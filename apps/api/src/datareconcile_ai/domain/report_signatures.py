@@ -27,6 +27,45 @@ def _bytes(text):
     return data
 
 
+def _check_report_content_consistency(payload):
+    """Bind signed report metadata to the independently parsable report body."""
+    raw = payload['report_json']
+    if not isinstance(raw, str):
+        raise ReportSignatureError('REPORT_CONTENT_INVALID')
+
+    def unique(pairs):
+        result = {}
+        for name, value in pairs:
+            if name in result:
+                raise ReportSignatureError('REPORT_CONTENT_DUPLICATE_KEY')
+            result[name] = value
+        return result
+
+    def nonfinite(_):
+        raise ReportSignatureError('REPORT_CONTENT_NONFINITE_NUMBER')
+
+    try:
+        content = json.loads(raw, object_pairs_hook=unique, parse_constant=nonfinite)
+    except ReportSignatureError:
+        raise
+    except (ValueError, RecursionError, TypeError):
+        raise ReportSignatureError('REPORT_CONTENT_INVALID') from None
+
+    required = {'source_revision', 'rule_version', 'totals', 'approved_summary_sha256'}
+    if (
+        not isinstance(content, dict)
+        or set(content) != required
+        or not isinstance(content['totals'], dict)
+        or not isinstance(content['rule_version'], str)
+    ):
+        raise ReportSignatureError('REPORT_CONTENT_SCHEMA_INVALID')
+    if (content['source_revision'] != payload['source_revision']
+            or content['approved_summary_sha256'] != payload['approved_summary_sha256']):
+        raise ReportSignatureError('REPORT_CONTENT_BINDING_MISMATCH')
+    if payload['ledger_sha256'] != payload['artifact_sha256']:
+        raise ReportSignatureError('REPORT_LEDGER_DIGEST_MISMATCH')
+
+
 def attest_report(report, tenant_id, private_key_pem):
     body = _bytes(report['content_json'])
     if not body or hashlib.sha256(body).hexdigest() != report['artifact_sha']:
@@ -38,11 +77,13 @@ def attest_report(report, tenant_id, private_key_pem):
         if not isinstance(key, Ed25519PrivateKey): raise ValueError('Wrong signing algorithm')
     except (ValueError, TypeError, UnicodeError, UnsupportedAlgorithm) as error:
         raise ReportSignatureError('REPORT_SIGNING_KEY_UNAVAILABLE') from error
-    payload = _json({'schema_version':'report-attestation-v1', 'tenant_id':tenant_id,
+    fields = {'schema_version':'report-attestation-v1', 'tenant_id':tenant_id,
         'report_id':report['id'], 'run_id':report['run_id'], 'artifact_sha256':report['artifact_sha'],
         'ledger_sha256':report['ledger_sha'], 'source_revision':report['source_revision'],
         'approved_summary_sha256':report['approved_summary_sha'], 'run_version':report['run_version'],
-        'finalized_at':report['finalized_at'], 'report_json':report['content_json']})
+        'finalized_at':report['finalized_at'], 'report_json':report['content_json']}
+    _check_report_content_consistency(fields)
+    payload = _json(fields)
     encoded = _bytes(payload)
     public = key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
     return {'algorithm':'Ed25519', 'key_sha256':hashlib.sha256(public).hexdigest(),
@@ -86,7 +127,8 @@ def verify_report_attestation(envelope, trusted_public_key_pem, expected_binding
     except (ValueError, RecursionError) as error: raise ReportSignatureError('REPORT_PAYLOAD_INVALID') from error
     if not isinstance(payload, dict) or set(payload) != PAYLOAD_FIELDS or payload['schema_version'] != 'report-attestation-v1':
         raise ReportSignatureError('REPORT_PAYLOAD_INVALID')
-    if any(name not in payload or payload[name] != value for name, value in expected_binding.items()):
+    if any(name not in payload or type(payload[name]) is not type(value) or payload[name] != value
+           for name, value in expected_binding.items()):
         raise ReportSignatureError('REPORT_BINDING_MISMATCH')
     if type(payload['run_version']) is not int or payload['run_version'] < 1:
         raise ReportSignatureError('REPORT_PAYLOAD_INVALID')
@@ -94,4 +136,5 @@ def verify_report_attestation(envelope, trusted_public_key_pem, expected_binding
         _bytes(payload[name])
     if hashlib.sha256(_bytes(payload['report_json'])).hexdigest() != payload['artifact_sha256']:
         raise ReportSignatureError('REPORT_CONTENT_DIGEST_MISMATCH')
+    _check_report_content_consistency(payload)
     return payload
