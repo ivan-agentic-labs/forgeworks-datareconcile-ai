@@ -259,6 +259,11 @@ class Store:
                 raise StoreValidationError("CSV_EXTERNAL_REF_INVALID", f"external_ref exceeds 256 characters at row {line_number}")
             if not ref or ref.strip() != ref or ref in refs:
                 raise StoreValidationError("CSV_DUPLICATE_EXTERNAL_REF", f"external_ref is empty, padded, or duplicated at row {line_number}")
+            # References become reconciliation identifiers and audit evidence.
+            # Quoted CSV can legally contain control bytes (including newlines);
+            # they must not silently create ambiguous or multiline identities.
+            if any(ord(char) < 32 or ord(char) == 127 for char in ref):
+                raise StoreValidationError("CSV_EXTERNAL_REF_INVALID", f"external_ref contains control characters at row {line_number}")
             refs.add(ref)
             row_currency = str(raw["currency"])
             if not re.fullmatch(r"[A-Z]{3}", row_currency) or row_currency != currency:
