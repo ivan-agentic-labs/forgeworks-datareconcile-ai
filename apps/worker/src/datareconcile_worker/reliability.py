@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -25,21 +27,27 @@ class JobResult:
 
 
 class WorkerJobRunner:
-    """Durable, at-most-one-active-attempt job execution for synthetic workers.
+    """Durable, leased job execution with fenced results for synthetic workers.
 
     The runner deliberately does not perform transfers or other external side
     effects. Callers provide a business-keyed operation (for example, a Store
     import or reconciliation command) which must itself be idempotent.
     """
 
-    def __init__(self, db_path: str, *, max_attempts: int = 3) -> None:
+    def __init__(self, db_path: str, *, max_attempts: int = 3,
+                 lease_seconds: float = 300, clock: Callable[[], float] = time.time) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be positive")
+        if type(lease_seconds) not in {int, float} or not math.isfinite(lease_seconds) or lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive and finite")
         self.db_path = db_path
         self.max_attempts = max_attempts
+        self.lease_seconds = lease_seconds
+        self.clock = clock
         if db_path != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as db:
+            db.execute("BEGIN IMMEDIATE")
             db.execute(
                 """
                 CREATE TABLE IF NOT EXISTS worker_jobs(
@@ -47,10 +55,13 @@ class WorkerJobRunner:
                     state TEXT NOT NULL,
                     attempt_count INTEGER NOT NULL,
                     last_error_code TEXT,
-                    result_json TEXT
+                    result_json TEXT,
+                    lease_expires_at REAL
                 )
                 """
             )
+            if 'lease_expires_at' not in {row['name'] for row in db.execute('PRAGMA table_info(worker_jobs)')}:
+                db.execute('ALTER TABLE worker_jobs ADD COLUMN lease_expires_at REAL')
 
     def _conn(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.db_path, timeout=10)
@@ -75,18 +86,35 @@ class WorkerJobRunner:
         return self._result(row) if row else None
 
     def recover_running(self) -> int:
-        """Recover leases left RUNNING by a crashed worker process."""
+        """Recover expired leases; legacy unfenced RUNNING rows are expired.
+
+        A process restart alone is not evidence that another runner is dead.
+        """
         with self._conn() as db:
+            db.execute("BEGIN IMMEDIATE")
             changed = db.execute(
                 """
                 UPDATE worker_jobs
                 SET state=CASE WHEN attempt_count >= ? THEN 'FAILED_TERMINAL' ELSE 'FAILED_RETRYABLE' END,
-                    last_error_code=?
-                WHERE state='RUNNING'
+                    last_error_code=?, lease_expires_at=NULL
+                WHERE state='RUNNING' AND COALESCE(lease_expires_at,0) <= ?
                 """,
-                (self.max_attempts, "WORKER_RESTARTED"),
+                (self.max_attempts, "WORKER_RESTARTED", self.clock()),
             ).rowcount
         return int(changed)
+
+    def _finish(self, job_key: str, attempt: int, state: str,
+                error_code: str | None = None, result_json: str | None = None) -> JobResult:
+        with self._conn() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "UPDATE worker_jobs SET state=?,last_error_code=?,result_json=?,lease_expires_at=NULL "
+                "WHERE job_key=? AND state='RUNNING' AND attempt_count=? AND lease_expires_at > ?",
+                (state, error_code, result_json, job_key, attempt, self.clock()),
+            )
+        # An expired or superseded attempt returns the current durable state;
+        # its operation's return value or error must never overwrite that state.
+        return self.status(job_key)  # type: ignore[return-value]
 
     def run(self, job_key: str, operation: Callable[[], Any]) -> JobResult:
         if not job_key.strip():
@@ -107,30 +135,21 @@ class WorkerJobRunner:
                 return self._result(row)
             db.execute(
                 """
-                INSERT INTO worker_jobs(job_key,state,attempt_count,last_error_code,result_json)
-                VALUES(?,?,?,?,NULL)
-                ON CONFLICT(job_key) DO UPDATE SET state='RUNNING',attempt_count=excluded.attempt_count,last_error_code=NULL
+                INSERT INTO worker_jobs(job_key,state,attempt_count,last_error_code,result_json,lease_expires_at)
+                VALUES(?,?,?,?,NULL,?)
+                ON CONFLICT(job_key) DO UPDATE SET state='RUNNING',attempt_count=excluded.attempt_count,
+                    last_error_code=NULL,result_json=NULL,lease_expires_at=excluded.lease_expires_at
                 """,
-                (job_key, "RUNNING", attempt, None),
+                (job_key, "RUNNING", attempt, None, self.clock() + self.lease_seconds),
             )
 
         try:
             value = operation()
         except RetryableJobError as exc:
             state = "FAILED_RETRYABLE" if attempt < self.max_attempts else "FAILED_TERMINAL"
-            with self._conn() as db:
-                db.execute(
-                    "UPDATE worker_jobs SET state=?,last_error_code=? WHERE job_key=? AND state='RUNNING'",
-                    (state, exc.code, job_key),
-                )
-            return self.status(job_key)  # type: ignore[return-value]
+            return self._finish(job_key, attempt, state, exc.code)
         except Exception as exc:
-            with self._conn() as db:
-                db.execute(
-                    "UPDATE worker_jobs SET state='FAILED_TERMINAL',last_error_code=? WHERE job_key=? AND state='RUNNING'",
-                    (type(exc).__name__, job_key),
-                )
-            return self.status(job_key)  # type: ignore[return-value]
+            return self._finish(job_key, attempt, 'FAILED_TERMINAL', type(exc).__name__)
 
         try:
             encoded = json.dumps(value, separators=(",", ":"), allow_nan=False)
@@ -139,16 +158,5 @@ class WorkerJobRunner:
         except (TypeError, ValueError, OverflowError, UnicodeError):
             # Never convert an invalid result to str(value) and report success.
             # Downstream finance consumers require the original JSON shape.
-            with self._conn() as db:
-                db.execute(
-                    "UPDATE worker_jobs SET state='FAILED_TERMINAL',last_error_code=?,result_json=NULL "
-                    "WHERE job_key=? AND state='RUNNING'",
-                    ("RESULT_SERIALIZATION_INVALID", job_key),
-                )
-            return self.status(job_key)  # type: ignore[return-value]
-        with self._conn() as db:
-            db.execute(
-                "UPDATE worker_jobs SET state='SUCCEEDED',last_error_code=NULL,result_json=? WHERE job_key=? AND state='RUNNING'",
-                (encoded, job_key),
-            )
-        return self.status(job_key)  # type: ignore[return-value]
+            return self._finish(job_key, attempt, 'FAILED_TERMINAL', 'RESULT_SERIALIZATION_INVALID')
+        return self._finish(job_key, attempt, 'SUCCEEDED', result_json=encoded)

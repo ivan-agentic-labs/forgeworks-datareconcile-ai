@@ -89,7 +89,8 @@ def test_worker_retry_survives_restart_and_terminal_failures_are_not_replayed(tm
 
 def test_worker_restart_recovers_an_abandoned_running_lease(tmp_path):
     jobs = str(tmp_path / "restart.db")
-    runner = WorkerJobRunner(jobs, max_attempts=2)
+    now = [1000.0]
+    runner = WorkerJobRunner(jobs, max_attempts=2, lease_seconds=10, clock=lambda: now[0])
 
     class SimulatedProcessCrash(BaseException):
         pass
@@ -98,7 +99,9 @@ def test_worker_restart_recovers_an_abandoned_running_lease(tmp_path):
         runner.run("import:crash-key", lambda: (_ for _ in ()).throw(SimulatedProcessCrash()))
     assert runner.status("import:crash-key").state == "RUNNING"
 
-    restarted = WorkerJobRunner(jobs, max_attempts=2)
+    restarted = WorkerJobRunner(jobs, max_attempts=2, lease_seconds=10, clock=lambda: now[0])
+    assert restarted.recover_running() == 0
+    now[0] += 10
     assert restarted.recover_running() == 1
     done = restarted.run("import:crash-key", lambda: {"accepted_rows": 3})
     assert done.state == "SUCCEEDED"
