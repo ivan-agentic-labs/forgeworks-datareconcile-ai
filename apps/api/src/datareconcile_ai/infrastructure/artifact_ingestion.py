@@ -62,7 +62,7 @@ class ArtifactIngestion:
     def command(db, tenant, actor, action, key, digest, artifact):
         db.execute("INSERT INTO source_artifact_commands VALUES(?,?,?,?,?,?)", (tenant, actor, action, key, digest, artifact))
 
-    def intent(self, tenant, actor, key, values):
+    def intent(self, tenant, actor, key, values, session_id=None):
         self.secret()
         if values["kind"] != "source" or values["declared_media_type"] not in {None, "text/csv"}:
             reject(422, "ARTIFACT_TYPE_UNSUPPORTED", "Only source CSV artifacts are supported")
@@ -75,12 +75,19 @@ class ArtifactIngestion:
                 artifact = str(uuid4())
                 db.execute("INSERT INTO source_artifacts(tenant_id,id,kind,filename,sha256,size_bytes,declared_media_type,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)", (tenant, artifact, values["kind"], values["filename"], values["sha256"], values["size_bytes"], values["declared_media_type"], "INTENT_ISSUED", now()))
                 self.command(db, tenant, actor, "upload", key, digest, artifact)
-        url, expires = self.capability(tenant, artifact, "upload", actor=actor)
+        url, expires = self.capability(tenant, artifact, "upload", actor=actor, session_id=session_id)
         return {"artifact_id":artifact, "status":"INTENT_ISSUED", "upload_url":url, "expires_at":expires, "required_headers":{"Content-Type":"text/csv"}}
 
-    def capability(self, tenant, artifact, action, generation=None, actor=None):
+    def capability(self, tenant, artifact, action, generation=None, actor=None, session_id=None):
+        # Signed links in Supabase mode are bound to an online-revocable
+        # login session, not merely a still-active tenant membership.
+        if os.getenv("AUTH_MODE") == "supabase":
+            try:
+                session_id = str(UUID(session_id))
+            except (ValueError, TypeError, AttributeError):
+                reject(503, "ARTIFACT_SESSION_BINDING_REQUIRED", "Authenticated session binding is required")
         expires = int(time.time()) + 300
-        token = jwt.encode({"iss":"datareconcile-artifacts", "aud":"artifact-transfer", "sub":artifact, "tenant_id":tenant, "actor_id":actor, "action":action, "generation":generation, "jti":str(uuid4()), "exp":expires}, self.secret(), algorithm="HS256")
+        token = jwt.encode({"iss":"datareconcile-artifacts", "aud":"artifact-transfer", "sub":artifact, "tenant_id":tenant, "actor_id":actor, "action":action, "generation":generation, "jti":str(uuid4()), "exp":expires, "session_id":session_id}, self.secret(), algorithm="HS256")
         return f"/v1/artifact-transfers/{artifact}?token={token}", datetime.fromtimestamp(expires, timezone.utc).isoformat().replace("+00:00", "Z")
 
     def verify_capability(self, token, artifact, action):
@@ -88,8 +95,23 @@ class ArtifactIngestion:
             claims = jwt.decode(token, self.secret(), algorithms=["HS256"], issuer="datareconcile-artifacts", audience="artifact-transfer", options={"require":["exp","sub","tenant_id","actor_id","action","jti"]})
             if claims["sub"] != artifact or claims["action"] != action:
                 raise jwt.InvalidTokenError("binding")
-            UUID(claims["tenant_id"])
-            if not self.store.member(claims["tenant_id"], claims["actor_id"]):
+            tenant = str(UUID(claims["tenant_id"]))
+            actor = str(UUID(claims["actor_id"]))
+            if os.getenv("AUTH_MODE") == "supabase":
+                try:
+                    session_id = str(UUID(claims["session_id"]))
+                except (KeyError, ValueError, TypeError, AttributeError):
+                    raise jwt.InvalidTokenError("session binding missing") from None
+                check = getattr(self.store, "session_active", None)
+                if not callable(check):
+                    reject(503, "ARTIFACT_SESSION_CHECK_UNAVAILABLE", "Session verification backend is unavailable")
+                try:
+                    active = check(tenant, actor, session_id)
+                except Exception:
+                    reject(503, "ARTIFACT_SESSION_CHECK_UNAVAILABLE", "Session verification backend is unavailable")
+                if not active:
+                    raise jwt.InvalidTokenError("session revoked")
+            if not self.store.member(tenant, actor):
                 raise jwt.InvalidTokenError("membership revoked")
             return claims
         except (jwt.PyJWTError, ValueError):
@@ -170,7 +192,7 @@ class ArtifactIngestion:
             reject(409, "SOURCE_DIGEST_MISMATCH", "Import digest differs from source artifact")
         return self.bytes(row).decode("utf-8")
 
-    def download(self, tenant, actor, artifact, key):
+    def download(self, tenant, actor, artifact, key, session_id=None):
         self.secret()
         digest = hashlib.sha256(artifact.encode()).hexdigest()
         with self.transaction(tenant, f"{tenant}:{actor}:download:{key}") as db:
@@ -181,5 +203,5 @@ class ArtifactIngestion:
             self.bytes(row)
             if not old:
                 self.command(db, tenant, actor, "download", key, digest, artifact)
-        url, expires = self.capability(tenant, artifact, "download", row["object_generation"], actor=actor)
+        url, expires = self.capability(tenant, artifact, "download", row["object_generation"], actor=actor, session_id=session_id)
         return {"artifact_id":artifact, "download_url":url, "expires_at":expires, "object_generation":row["object_generation"]}
