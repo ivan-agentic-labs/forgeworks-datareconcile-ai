@@ -12,6 +12,7 @@ from uuid import UUID
 
 import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Query
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -68,12 +69,12 @@ class Resolve(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: str
     evidence_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    expected_version: int = Field(ge=1)
+    expected_version: int = Field(ge=1, strict=True)
 
 
 class Finalize(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    expected_version: int = Field(ge=1)
+    expected_version: int = Field(ge=1, strict=True)
     approved_summary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -161,6 +162,15 @@ def create_app(db_path=None, seed=False):
     app.add_middleware(BodyBudgetMiddleware)
     app.state.store = store
     artifacts = ArtifactIngestion(store)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_, error: RequestValidationError):
+        # Do not echo raw input or attempt to serialize non-finite values.
+        return JSONResponse(status_code=422, content={
+            "type": "about:blank", "title": "Request rejected", "status": 422,
+            "code": "INVALID_REQUEST", "detail": "Request does not match the input contract",
+            "request_id": "runtime",
+        })
 
     @app.exception_handler(HTTPException)
     async def errors(_, exc):
