@@ -199,7 +199,7 @@ def create_app(db_path=None, seed=False):
 
     @app.post("/v1/artifacts/upload-intents", status_code=201)
     def upload_intent(body: UploadIntent, idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None, c=Depends(scope("artifact:create", store))):
-        return artifacts.intent(c["tenant_id"], c["sub"], idempotency_key, body.model_dump())
+        return artifacts.intent(c["tenant_id"], c["sub"], idempotency_key, body.model_dump(), session_id=c.get("session_id"))
 
     @app.put("/v1/artifact-transfers/{artifact_id}", status_code=201)
     async def upload_bytes(artifact_id: UUID, request: Request, token: str = Query(max_length=4096)):
@@ -225,7 +225,7 @@ def create_app(db_path=None, seed=False):
 
     @app.post("/v1/artifacts/{artifact_id}/download-intents", status_code=201)
     def artifact_download(artifact_id: UUID, idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None, c=Depends(scope("artifact:download", store))):
-        return artifacts.download(c["tenant_id"], c["sub"], str(artifact_id), idempotency_key)
+        return artifacts.download(c["tenant_id"], c["sub"], str(artifact_id), idempotency_key, session_id=c.get("session_id"))
 
     @app.get("/v1/artifact-transfers/{artifact_id}")
     def download_bytes(artifact_id: UUID, token: str = Query(max_length=4096)):
