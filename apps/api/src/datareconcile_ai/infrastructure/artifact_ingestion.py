@@ -1,5 +1,6 @@
 """Bounded verified CSV artifacts using private S3 or a development byte store."""
 import base64
+import binascii
 import csv
 import hashlib
 import io
@@ -150,7 +151,9 @@ class ArtifactIngestion:
             return self.objects.read(row["tenant_id"], row["id"], row["object_generation"], row["sha256"], row["size_bytes"])
         try:
             body = base64.b64decode(row["content_base64"], validate=True)
-        except ValueError:
+        except (ValueError, binascii.Error, TypeError):
+            # A damaged or invalid object is an integrity failure, never an
+            # unhandled decoding exception (500) or a partial source import.
             reject(409, "ARTIFACT_INTEGRITY_FAILURE", "Invalid stored encoding")
         if len(body) > MAX_BYTES or len(body) != row["size_bytes"] or hashlib.sha256(body).hexdigest() != row["sha256"]:
             reject(409, "ARTIFACT_INTEGRITY_FAILURE", "Stored bytes do not match metadata")
