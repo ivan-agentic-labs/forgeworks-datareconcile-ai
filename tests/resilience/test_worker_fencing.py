@@ -2,6 +2,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 import json
+import multiprocessing
+import os
 import sqlite3
 
 import pytest
@@ -115,30 +117,42 @@ def test_invalid_lease_budget_is_rejected(tmp_path, lease):
         WorkerJobRunner(str(tmp_path / 'jobs.db'), lease_seconds=lease)
 
 
-def test_crash_after_business_commit_replays_without_duplicate_results(tmp_path):
+def commit_then_exit(job_path, business_path, left, right):
+    store = Store(business_path)
+    runner = WorkerJobRunner(job_path, lease_seconds=10, clock=lambda: 1000.0)
+    def operation():
+        store.run(TENANT, left, right, 'exact-v1')
+        os._exit(23)  # Skip all Python cleanup after the business transaction commits.
+    runner.run('reconcile:after-commit', operation)
+
+
+def test_process_exit_after_business_commit_replays_without_duplicate_results(tmp_path):
     clock = Clock()
     store = Store(str(tmp_path / 'business.db'))
     store.seed()
     left = store.batch(TENANT, 'left-fixture', 'a' * 64, 'USD')
     right = store.batch(TENANT, 'right-fixture', 'b' * 64, 'USD')
     path = str(tmp_path / 'jobs.db')
+    process = multiprocessing.get_context('spawn').Process(
+        target=commit_then_exit, args=(path, str(tmp_path / 'business.db'), left['id'], right['id']))
+    process.start()
+    process.join(timeout=10)
+    if process.is_alive():
+        process.kill()
+        process.join(timeout=5)
+        pytest.fail('Child process did not terminate within its test budget')
+    assert process.exitcode == 23
     runner = WorkerJobRunner(path, lease_seconds=10, clock=clock)
-    committed = []
-    class ProcessCrash(BaseException):
-        pass
-    def crash_after_commit():
-        committed.append(store.run(TENANT, left['id'], right['id'], 'exact-v1')['id'])
-        raise ProcessCrash()
-    with pytest.raises(ProcessCrash):
-        runner.run('reconcile:after-commit', crash_after_commit)
+    assert runner.status('reconcile:after-commit').state == 'RUNNING'
     with store.conn() as db:
+        committed = db.execute('SELECT id FROM runs').fetchone()[0]
         before = {table: db.execute(f'SELECT count(*) FROM {table}').fetchone()[0]
                   for table in ('runs', 'allocations', 'exceptions', 'audit_events')}
     clock.now += 10
     restarted = WorkerJobRunner(path, lease_seconds=10, clock=clock)
     assert restarted.recover_running() == 1
     result = restarted.run('reconcile:after-commit', lambda: {'run': store.run(TENANT, left['id'], right['id'], 'exact-v1')['id']})
-    assert result.state == 'SUCCEEDED' and result.value == {'run': committed[0]}
+    assert result.state == 'SUCCEEDED' and result.value == {'run': committed}
     assert result.attempt_count == 2
     with store.conn() as db:
         assert {table: db.execute(f'SELECT count(*) FROM {table}').fetchone()[0]
