@@ -39,3 +39,12 @@ def test_byte_budget_uses_utf8_bytes_not_character_count():
 def test_unbounded_external_reference_is_rejected():
     with pytest.raises(StoreValidationError):
         Store.parse_csv(HEADER + "x" * 257 + ",USD,1,2026-10-09T00:00:00Z\n", "USD")
+
+
+@pytest.mark.parametrize("control", ["\\x00", "\\x01", "\\t", "\\r", "\\n", "\\x7f"])
+def test_quoted_financial_reference_rejects_embedded_control_characters(control):
+    # Quoting permits embedded CR/LF in CSV; identifier and audit storage must not.
+    raw = HEADER + f'"acct{control}002",USD,1,2026-10-09T00:00:00Z\\n'
+    with pytest.raises(StoreValidationError) as error:
+        Store.parse_csv(raw, "USD")
+    assert error.value.code == "CSV_EXTERNAL_REF_INVALID"
