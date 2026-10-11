@@ -97,6 +97,18 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
     right=header+'r1,USD,100,2026-01-01T00:00:00Z\nr2,USD,200,2026-01-01T00:00:00Z\n'
     a=store.batch(TENANT,'left',hashlib.sha256(left.encode()).hexdigest(),'USD',csv_content=left)
     b=store.batch(TENANT,'right',hashlib.sha256(right.encode()).hexdigest(),'USD',csv_content=right)
+    mixed = header + 'idr1,IDR,100,2026-01-01T00:00:00Z\n'
+    different_currency = store.batch(TENANT, 'idr-side', hashlib.sha256(mixed.encode()).hexdigest(), 'IDR', csv_content=mixed)
+    def result_counts():
+        with store.conn(TENANT) as db:
+            return {table: db.execute(f'SELECT count(*) AS count FROM {table} WHERE tenant_id=?', (TENANT,)).fetchone()['count']
+                    for table in ('runs', 'allocations', 'exceptions', 'source_artifact_commands', 'audit_events')}
+    before = result_counts()
+    for left_id, right_id in [(a['id'], different_currency['id']), (different_currency['id'], a['id'])]:
+        with pytest.raises(StoreValidationError) as mismatch:
+            store.run(TENANT, left_id, right_id, 'exact-v1', actor=USER, idempotency_key='pg-currency-invariant-0001')
+        assert mismatch.value.code == 'CURRENCY_MISMATCH'
+        assert result_counts() == before
     with pytest.raises(StoreValidationError) as duplicate:
         store.batch(TENANT,'left',hashlib.sha256(left.encode()).hexdigest(),'USD',csv_content=left)
     assert duplicate.value.code=='DUPLICATE_IMPORT'

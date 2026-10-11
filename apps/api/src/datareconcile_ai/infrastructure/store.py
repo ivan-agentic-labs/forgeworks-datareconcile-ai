@@ -354,6 +354,8 @@ class Store:
         left_batch, right_batch = self.get_batch(tenant, left), self.get_batch(tenant, right)
         if not left_batch or not right_batch:
             raise StoreValidationError("RESOURCE_NOT_FOUND", "Import is not visible")
+        if left_batch["currency"] != right_batch["currency"]:
+            raise StoreValidationError("CURRENCY_MISMATCH", "Only same-currency matching is supported")
         source_revision = hashlib.sha256(
             (left_batch["file_sha"] + right_batch["file_sha"] + left_batch["profile_version"] + right_batch["profile_version"] + rule).encode()
         ).hexdigest()
