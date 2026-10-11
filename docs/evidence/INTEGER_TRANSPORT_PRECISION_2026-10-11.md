@@ -8,3 +8,5 @@ Baseline eccbf71aed0ff33296bb9d23b7ff14d9c66e5b92 used response.json(), which ro
 ℹ fail 10
 
 Candidate: all 12 regressions pass; all 15 JavaScript tests pass; 2 static console tests pass. Full GitHub application, contract and PostgreSQL checks must pass before merge. No deployment, browser fleet compatibility, production readiness or change to backend JSON contract is claimed. Clients outside this console still require explicit lossless integer handling.
+
+The application workflow also requires a real Chromium probe: the actual console fetches synthetic integer JSON over local HTTP, sums source rows and renders report totals in the DOM. Browser version, exact amount/total and JavaScript errors are emitted as a receipt. This does not exercise the product API business flow or staging deployment.
