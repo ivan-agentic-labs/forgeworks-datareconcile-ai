@@ -53,7 +53,8 @@ def test_upload_commit_import_download_and_response_contract(tmp_path):
         assert client.get(download.json()['download_url']).status_code==403
 
 
-def test_pending_wrong_digest_generation_and_tampering_are_rejected(tmp_path):
+@pytest.mark.parametrize("stored_bytes", ["dGFtcGVy", "%%%invalid-base64%%%"])
+def test_pending_wrong_digest_generation_and_tampering_are_rejected(tmp_path, stored_bytes):
     app=create_app(str(tmp_path/'db.sqlite'),seed=True)
     with TestClient(app) as client:
         record,values=intent(client)
@@ -64,7 +65,7 @@ def test_pending_wrong_digest_generation_and_tampering_are_rejected(tmp_path):
         uploaded=client.put(record['upload_url'],content=CSV);commit['object_generation']=uploaded.json()['object_generation']
         assert client.post(url,headers=auth('artifact:commit','artifact-commit-key-001'),json=commit).status_code==202
         with app.state.store.conn() as db:
-            db.execute("UPDATE source_artifacts SET content_base64='dGFtcGVy' WHERE tenant_id=? AND id=?",(TENANT,record['artifact_id']))
+            db.execute("UPDATE source_artifacts SET content_base64=? WHERE tenant_id=? AND id=?",(stored_bytes,TENANT,record['artifact_id']))
         result=client.post(f"/v1/artifacts/{record['artifact_id']}/download-intents",headers=auth('artifact:download','artifact-download-key-001'))
         assert result.status_code==409 and result.json()['code']=='ARTIFACT_INTEGRITY_FAILURE'
 
