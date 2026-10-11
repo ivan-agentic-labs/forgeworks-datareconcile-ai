@@ -1,0 +1,13 @@
+# Worker lease fencing — 2026-10-11
+
+Baseline: 81fe44e1979cdd6f073da4e6993f570f853bd7ed.
+
+The synthetic SQLite runner recovered every RUNNING job on a restart, even when another runner was still executing it. Completion updates checked only job key and RUNNING state, so an old attempt could write to a replacement attempt. This did not establish at-most-one active operation.
+
+Persist a configurable finite positive lease (default 300 seconds); recover only expired leases. Claim increments the durable attempt count. Every completion path compares that count and requires an unexpired lease while holding the SQLite write transaction. This fences stale successes, retryable failures, terminal failures and invalid serialized results. Recovery still honors the attempt budget. Existing completed jobs survive the additive local SQLite schema upgrade; legacy unfenced RUNNING rows expire, requiring old runner versions to be stopped before upgrade.
+
+Initial red suite: 13 failures. One directly reproduces reclaiming live work; the others initially fail because the lease configuration/testing interface did not exist. These are not 13 independently reproduced production incidents. The completed suite has 18 passing cases: live-work recovery, eight old/replacement completion interleavings, expiry and retry exhaustion, schema upgrade/repeated startup, invalid lease budgets, and crash after a domain reconciliation commit before recording worker success. The last case proves retry preserves run ID and counts of runs, allocations, exceptions and audit events. Events and an injected clock control concurrency without timing sleeps. The existing crash/restart test now waits for lease expiry with an injected clock rather than reclaiming an active lease.
+
+Full local validation: 257 Python tests passed, one dedicated native PostgreSQL test skipped; 15 JavaScript tests passed. Bootstrap scan, contract checks, independent OpenAPI validation and whitespace checks passed. Required hosted CI additionally exercises native PostgreSQL and logical backup/restore, real Chromium exact integer transport and generated SDK compilation before merge.
+
+Limits: this is a synthetic worker reliability harness, not the deployed API job executor or a production queue. There is no heartbeat/cancellation; after expiry old and replacement operations can overlap. Domain idempotency remains mandatory for business effects. Runners must share one local SQLite database and a consistent wall clock; the lease must cover bounded operation duration. Distributed ownership, tenant-scoped queue provisioning, external side-effect reconciliation, production load and operational acceptance remain unverified. No deployment or live database migration is performed by this change.
