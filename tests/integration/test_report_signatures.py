@@ -163,3 +163,58 @@ def test_signed_report_content_hash_is_checked_independently(tmp_path):
     envelope.update(signed_payload=body.decode(),signed_payload_sha256=hashlib.sha256(body).hexdigest(),signature=base64.urlsafe_b64encode(key.sign(body)).decode())
     with pytest.raises(ReportSignatureError,match='REPORT_CONTENT_DIGEST_MISMATCH'):
         verify_report_attestation(envelope,public,binding)
+
+
+def _resign_modified_payload(envelope, signing_key, changes):
+    payload = json.loads(envelope['signed_payload'])
+    payload.update(changes)
+    body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return {**envelope,
+        "signed_payload": body.decode("utf-8"),
+        "signed_payload_sha256": hashlib.sha256(body).hexdigest(),
+        "signature": base64.urlsafe_b64encode(signing_key.sign(body)).decode(),
+    }
+
+
+@pytest.mark.parametrize("changes,code", [
+    ({"source_revision": "another-source"}, "REPORT_CONTENT_BINDING_MISMATCH"),
+    ({"approved_summary_sha256": "e" * 64}, "REPORT_CONTENT_BINDING_MISMATCH"),
+    ({"ledger_sha256": "d" * 64}, "REPORT_LEDGER_DIGEST_MISMATCH"),
+])
+def test_even_validly_resigned_metadata_must_match_report_content(tmp_path, changes, code):
+    _, report, binding = prepared(tmp_path)
+    key, private, public = keys()
+    envelope = attest_report(report, TENANT, private)
+    forged = _resign_modified_payload(envelope, key, changes)
+    with pytest.raises(ReportSignatureError, match=code):
+        verify_report_attestation(forged, public, binding)
+
+
+def test_signer_rejects_duplicate_keys_inside_report_content(tmp_path):
+    _, report, _ = prepared(tmp_path)
+    _, private, _ = keys()
+    forged_content = report["content_json"].replace(
+        '"source_revision":', '"source_revision":"duplicate","source_revision":', 1
+    )
+    altered = dict(report)
+    altered["content_json"] = forged_content
+    altered["artifact_sha"] = hashlib.sha256(forged_content.encode()).hexdigest()
+    altered["ledger_sha"] = altered["artifact_sha"]
+    with pytest.raises(ReportSignatureError, match="REPORT_CONTENT_DUPLICATE_KEY"):
+        attest_report(altered, TENANT, private)
+
+
+def test_signer_rejects_inconsistent_ledger_even_with_correct_content_digest(tmp_path):
+    _, report, _ = prepared(tmp_path)
+    _, private, _ = keys()
+    with pytest.raises(ReportSignatureError, match="REPORT_LEDGER_DIGEST_MISMATCH"):
+        attest_report({**dict(report), "ledger_sha": "0" * 64}, TENANT, private)
+
+
+def test_verifier_requires_strict_expected_binding_types(tmp_path):
+    _, report, binding = prepared(tmp_path)
+    _, private, public = keys()
+    envelope = attest_report(report, TENANT, private)
+    assert json.loads(envelope["signed_payload"])["run_version"] == 1
+    with pytest.raises(ReportSignatureError, match="REPORT_BINDING_MISMATCH"):
+        verify_report_attestation(envelope, public, {**binding, "run_version": True})
