@@ -64,3 +64,28 @@ def test_financial_reference_rejects_invisible_unicode_and_bidi_format_controls(
 def test_visible_utf8_reference_remains_lossless():
     records = Store.parse_csv(HEADER + "café-2026,USD,1,2026-10-09T00:00:00Z\n", "USD")
     assert records[0]["external_ref"] == "café-2026"
+
+
+@pytest.mark.parametrize("timestamp", [
+    "2026-10-09 00:00:00Z",
+    "2026-10-09X00:00:00Z",
+    "2026-10-09T00:00Z",
+    "20261009T000000Z",
+    "2026-10-09T00:00:00.1234567Z",
+    "2026-10-09T00:00:00",
+    "2026-10-09T00:00:00+07:00junk",
+])
+def test_ambiguous_or_precision_truncated_financial_timestamps_fail(timestamp):
+    with pytest.raises(StoreValidationError) as error:
+        Store.parse_csv(HEADER + f"synthetic-a,USD,1,{timestamp}\n", "USD")
+    assert error.value.code == "CSV_TIMESTAMP_INVALID"
+
+
+@pytest.mark.parametrize("timestamp,expected", [
+    ("2026-10-09T00:00:00Z", "2026-10-09T00:00:00Z"),
+    ("2026-10-09T07:00:00+07:00", "2026-10-09T00:00:00Z"),
+    ("2026-10-09T00:00:00.123456Z", "2026-10-09T00:00:00.123456Z"),
+])
+def test_explicit_rfc3339_financial_timestamp_preserves_utc_value(timestamp, expected):
+    rows = Store.parse_csv(HEADER + f"synthetic-a,USD,1,{timestamp}\n", "USD")
+    assert rows[0]["occurred_at"] == expected
