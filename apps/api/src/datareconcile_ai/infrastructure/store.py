@@ -369,6 +369,12 @@ class Store:
             return c.execute("SELECT * FROM rows_ WHERE tenant_id=? AND batch_id=? ORDER BY row_number", (tenant, bid)).fetchall()
 
     def run(self, tenant: str, left: str, right: str, rule: str, *, actor: str | None = None, idempotency_key: str | None = None) -> sqlite3.Row:
+        # Never silently execute the legacy matching algorithm under a
+        # caller-supplied, unimplemented policy name.
+        if rule not in {"exact", "exact-v1", "exact-1to1-v1", "unambiguous-amount-v2"}:
+            raise StoreValidationError("UNSUPPORTED_RECONCILIATION_RULE", "Unknown reconciliation rule version")
+        if left == right:
+            raise StoreValidationError("IDENTICAL_SOURCE_BATCHES", "A source import cannot be reconciled against itself")
         left_batch, right_batch = self.get_batch(tenant, left), self.get_batch(tenant, right)
         if not left_batch or not right_batch:
             raise StoreValidationError("RESOURCE_NOT_FOUND", "Import is not visible")

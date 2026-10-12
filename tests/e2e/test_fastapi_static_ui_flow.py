@@ -110,7 +110,7 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
         conflict_run = client.post(
             "/v1/reconciliation-runs",
             headers=headers("reconcile:run", idempotency_key="e2e-reconcile-0001"),
-            json={**reconcile_body, "rule_version": "different-rule-v2"},
+            json={**reconcile_body, "rule_version": "unambiguous-amount-v2"},
         )
         assert conflict_run.status_code == 409
         assert conflict_run.json()["code"] == "IDEMPOTENCY_CONFLICT"
