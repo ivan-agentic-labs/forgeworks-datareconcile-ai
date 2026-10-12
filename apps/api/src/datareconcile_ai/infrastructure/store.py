@@ -45,6 +45,10 @@ def _iso(value: str) -> str:
         value,
     ):
         raise ValueError("occurred_at requires RFC3339 seconds, an offset, and at most 6 fractional digits")
+    # RFC3339 -00:00 denotes an unknown local offset. Collapsing it to UTC
+    # would falsely claim the original financial event timezone was known.
+    if value.endswith("-00:00"):
+        raise ValueError("occurred_at has an unknown timezone offset")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (TypeError, ValueError) as exc:

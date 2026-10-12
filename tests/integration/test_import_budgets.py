@@ -89,3 +89,16 @@ def test_ambiguous_or_precision_truncated_financial_timestamps_fail(timestamp):
 def test_explicit_rfc3339_financial_timestamp_preserves_utc_value(timestamp, expected):
     rows = Store.parse_csv(HEADER + f"synthetic-a,USD,1,{timestamp}\n", "USD")
     assert rows[0]["occurred_at"] == expected
+
+
+def test_rfc3339_unknown_timezone_offset_does_not_claim_known_utc():
+    source = HEADER + "unknown-zone,USD,100,2026-10-09T00:00:00-00:00\n"
+    with pytest.raises(StoreValidationError) as error:
+        Store.parse_csv(source, "USD")
+    assert error.value.code == "CSV_TIMESTAMP_INVALID"
+
+
+def test_explicit_known_utc_offsets_remain_supported():
+    source = HEADER + "known-utc,USD,100,2026-10-09T00:00:00+00:00\n"
+    result = Store.parse_csv(source, "USD")
+    assert result[0]["occurred_at"] == "2026-10-09T00:00:00Z"
