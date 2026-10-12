@@ -1,7 +1,7 @@
 [project]
 name = "datareconcile-ai"
 version = "0.1.0"
-description = "Synthetic MVP for deterministic API change analysis"
+description = "Deterministic transaction reconciliation and signed reports"
 requires-python = ">=3.11"
 dependencies = ["psycopg[binary]==3.3.6",
   "fastapi>=0.115,<1",

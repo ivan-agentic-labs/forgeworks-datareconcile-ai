@@ -7,12 +7,20 @@ Deterministic transaction reconciliation, exceptions, approvals and auditability
 The first executable slice imports synthetic rows, uses integer minor units, performs deterministic same-currency 1:1 matching, creates exceptions, records authorized resolutions, and finalizes an immutable report. It never transfers funds or uses floating-point amounts.
 
 ## MVP run and test
+
 ```bash
-python -m pip install -e 'apps/api[test]'
+python -m pip install --require-hashes -r requirements-runtime.lock
+python -m pip install -e 'apps/api[test]' -r scripts/requirements-verification.txt
+export APP_ENV=development AUTH_MODE=development
+export AUTH_ISSUER=https://issuer.synthetic.invalid AUTH_AUDIENCE=forgeworks-api
+export DEV_AUTH_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+export ARTIFACT_SIGNING_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+python scripts/development_token.py
 RECONCILE_SEED_FIXTURE=1 PYTHONPATH=apps/api/src uvicorn datareconcile_ai.main:app --reload
-python -W error -m pytest tests/integration
 ```
-The SQLite store and development issuer are test-only. See `docs/evidence/MVP_CHECKPOINT.md`.
+
+The printed token lasts 15 minutes and belongs to the local synthetic tenant/user. Use a second terminal with the same explicit development environment to run python -W error -m pytest tests. Never enable fixtures or reuse the development token on hosted infrastructure or customer data.
+
 
 ## Documents
 - Product scope: `docs/product/PRODUCT_SCOPE.md`
@@ -33,7 +41,7 @@ python scripts/validate_openapi_independent.py
 CI runs on main and verifies the complete test tree, OpenAPI/event contracts, generated TypeScript client, implemented PostgreSQL MVP runtime, tenant RLS/concurrency and disposable logical backup/restore. These are scoped synthetic proofs; full G1-E and production operations remain open.
 
 ## Non-goals at this stage
-No production deployment, customer data, code-execution agent, public access, financial mutation, license assertion or fake passing tests.
+No production deployment, customer data, code-execution agent, customer production access, financial mutation, license assertion or fake passing tests.
 
 ## Governance
 The owner approved proceeding with GitHub bootstrap. Technical G1-E controls are still pending until their tests actually pass and evidence is reviewed. See `docs/governance/MASTER_G1_DECISION.md` for pre-approval baseline language; the owner approval is recorded here as a later decision.
@@ -50,3 +58,7 @@ Development/disposable source ingestion now supports `/v1/artifacts/upload-inten
 Also apply `004_artifact_immutability.sql`: PostgreSQL rejects changes to declared metadata, uploaded bytes/generation, or backward state transitions even when issued by the tenant application role. SQLite remains a disposable development adapter and does not claim this database-enforced guarantee.
 
 See [current G1/G2 evidence](docs/verification/CURRENT_GATE_EVIDENCE.md), [exact source receipt](docs/evidence/MAIN_VERIFICATION_2026-10-09.json), and [owner main authorization](docs/governance/ENGINEERING_MAIN_AUTHORIZATION_2026-10-09.md). PostgreSQL adapters exist for all five independent projects. Historical evidence retains its source SHA and narrower scope.
+
+## Hosted release verification
+
+See [runtime identity, private telemetry and production acceptance](ops/runbooks/RUNTIME_RELEASE_VERIFICATION.md). Hosted releases expose a bounded source fingerprint and require a separate server-only metrics credential. Production startup requires separate infrastructure and an actual trusted, signed acceptance receipt. An unsigned template or passing synthetic CI does not establish production acceptance.
