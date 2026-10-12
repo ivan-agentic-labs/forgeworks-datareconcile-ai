@@ -48,3 +48,19 @@ def test_quoted_financial_reference_rejects_embedded_control_characters(control)
     with pytest.raises(StoreValidationError) as error:
         Store.parse_csv(raw, "USD")
     assert error.value.code == "CSV_EXTERNAL_REF_INVALID"
+
+
+@pytest.mark.parametrize("invisible", [
+    "\\u200b", "\\u200d", "\\u202e", "\\u2066", "\\u2028", "\\u2029", "\\ufeff",
+])
+def test_financial_reference_rejects_invisible_unicode_and_bidi_format_controls(invisible):
+    character = invisible.encode("ascii").decode("unicode_escape")
+    source = HEADER + f'"invoice{character}002",USD,1,2026-10-09T00:00:00Z\\n'.replace('\\n', '\n')
+    with pytest.raises(StoreValidationError) as error:
+        Store.parse_csv(source, "USD")
+    assert error.value.code == "CSV_EXTERNAL_REF_INVALID"
+
+
+def test_visible_utf8_reference_remains_lossless():
+    records = Store.parse_csv(HEADER + "café-2026,USD,1,2026-10-09T00:00:00Z\n", "USD")
+    assert records[0]["external_ref"] == "café-2026"
