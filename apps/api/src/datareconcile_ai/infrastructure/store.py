@@ -37,6 +37,14 @@ def now() -> str:
 
 
 def _iso(value: str) -> str:
+    # fromisoformat accepts arbitrary date/time separators, truncated clock
+    # components and silently discards fractional precision beyond 6 digits.
+    # Do not normalize ambiguous financial source timestamps into audit rows.
+    if not isinstance(value, str) or not re.fullmatch(
+        r"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})",
+        value,
+    ):
+        raise ValueError("occurred_at requires RFC3339 seconds, an offset, and at most 6 fractional digits")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (TypeError, ValueError) as exc:
