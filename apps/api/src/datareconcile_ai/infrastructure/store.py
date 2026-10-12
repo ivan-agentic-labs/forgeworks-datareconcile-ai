@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import unicodedata
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -262,8 +263,8 @@ class Store:
             # References become reconciliation identifiers and audit evidence.
             # Quoted CSV can legally contain control bytes (including newlines);
             # they must not silently create ambiguous or multiline identities.
-            if any(ord(char) < 32 or ord(char) == 127 for char in ref):
-                raise StoreValidationError("CSV_EXTERNAL_REF_INVALID", f"external_ref contains control characters at row {line_number}")
+            if any(unicodedata.category(char) in {"Cc", "Cf", "Cs", "Zl", "Zp"} for char in ref):
+                raise StoreValidationError("CSV_EXTERNAL_REF_INVALID", f"external_ref contains invisible or control characters at row {line_number}")
             refs.add(ref)
             row_currency = str(raw["currency"])
             if not re.fullmatch(r"[A-Z]{3}", row_currency) or row_currency != currency:
