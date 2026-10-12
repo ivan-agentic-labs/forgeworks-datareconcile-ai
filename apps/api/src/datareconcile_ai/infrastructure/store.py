@@ -41,7 +41,7 @@ def _iso(value: str) -> str:
     # components and silently discards fractional precision beyond 6 digits.
     # Do not normalize ambiguous financial source timestamps into audit rows.
     if not isinstance(value, str) or not re.fullmatch(
-        r"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})",
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})",
         value,
     ):
         raise ValueError("occurred_at requires RFC3339 seconds, an offset, and at most 6 fractional digits")
