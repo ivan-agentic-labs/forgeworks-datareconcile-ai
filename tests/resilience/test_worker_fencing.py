@@ -157,3 +157,72 @@ def test_process_exit_after_business_commit_replays_without_duplicate_results(tm
     with store.conn() as db:
         assert {table: db.execute(f'SELECT count(*) FROM {table}').fetchone()[0]
                 for table in before} == before
+
+
+
+def test_next_idempotent_call_auto_reclaims_expired_lease_without_manual_recovery(tmp_path):
+    clock = Clock()
+    runner = WorkerJobRunner(str(tmp_path / "auto.db"), lease_seconds=10, clock=clock, max_attempts=3)
+
+    class SimulatedCrash(BaseException):
+        pass
+
+    with pytest.raises(SimulatedCrash):
+        runner.run("reconcile:auto-retry", lambda: (_ for _ in ()).throw(SimulatedCrash()))
+    assert runner.status("reconcile:auto-retry").state == "RUNNING"
+    clock.now += 9
+    invoked = []
+    still_running = runner.run("reconcile:auto-retry", lambda: invoked.append("too-early"))
+    assert still_running.state == "RUNNING"
+    assert invoked == []
+    clock.now += 1
+    recovered = runner.run("reconcile:auto-retry", lambda: invoked.append("reclaimed") or {"result": "safe"})
+    assert recovered.state == "SUCCEEDED"
+    assert recovered.attempt_count == 2
+    assert recovered.value == {"result": "safe"}
+    assert invoked == ["reclaimed"]
+    assert runner.recover_running() == 0
+
+
+def test_auto_reclaim_exhausted_retry_budget_never_executes_operation(tmp_path):
+    clock = Clock()
+    runner = WorkerJobRunner(str(tmp_path / "exhausted.db"), lease_seconds=5, clock=clock, max_attempts=1)
+
+    class SimulatedCrash(BaseException):
+        pass
+
+    with pytest.raises(SimulatedCrash):
+        runner.run("reconcile:terminal-expiry", lambda: (_ for _ in ()).throw(SimulatedCrash()))
+    clock.now += 5
+    calls = []
+    final = runner.run("reconcile:terminal-expiry", lambda: calls.append("unexpected"))
+    assert final.state == "FAILED_TERMINAL"
+    assert final.last_error_code == "WORKER_LEASE_EXPIRED"
+    assert final.attempt_count == 1 and final.value is None
+    assert calls == []
+    assert runner.run("reconcile:terminal-expiry", lambda: calls.append("unexpected")) == final
+
+
+def test_automatic_expiry_reclaim_fences_late_original_attempt(tmp_path):
+    clock = Clock()
+    path = str(tmp_path / "auto-fence.db")
+    old_runner = WorkerJobRunner(path, lease_seconds=10, clock=clock)
+    new_runner = WorkerJobRunner(path, lease_seconds=10, clock=clock)
+    started, release = Event(), Event()
+
+    def held_original():
+        started.set()
+        assert release.wait(5)
+        return {"owner": "old-should-never-win"}
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        old_future = pool.submit(old_runner.run, "reconcile:shared-auto", held_original)
+        assert started.wait(5)
+        clock.now += 10
+        accepted = new_runner.run("reconcile:shared-auto", lambda: {"owner": "new"})
+        release.set()
+        stale = old_future.result(timeout=5)
+    assert accepted.state == "SUCCEEDED" and accepted.attempt_count == 2
+    assert accepted.value == {"owner": "new"}
+    assert stale == accepted
+    assert new_runner.recover_running() == 0
