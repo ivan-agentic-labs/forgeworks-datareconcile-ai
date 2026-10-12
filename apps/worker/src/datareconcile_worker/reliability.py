@@ -122,8 +122,24 @@ class WorkerJobRunner:
         with self._conn() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM worker_jobs WHERE job_key=?", (job_key,)).fetchone()
-            if row and row["state"] in {"SUCCEEDED", "FAILED_TERMINAL", "RUNNING"}:
+            if row and row["state"] in {"SUCCEEDED", "FAILED_TERMINAL"}:
                 return self._result(row)
+            if row and row["state"] == "RUNNING":
+                # The lease is the fencing authority, not the process that
+                # originally claimed it. Reclaim only after expiration while
+                # holding the SQLite write lock. A stale worker's _finish()
+                # will fail its attempt-number / lease fence.
+                if row["lease_expires_at"] is not None and row["lease_expires_at"] > self.clock():
+                    return self._result(row)
+                if int(row["attempt_count"]) >= self.max_attempts:
+                    db.execute(
+                        "UPDATE worker_jobs SET state='FAILED_TERMINAL',last_error_code=?,"
+                        "lease_expires_at=NULL WHERE job_key=? AND state='RUNNING'",
+                        ("WORKER_LEASE_EXPIRED", job_key),
+                    )
+                    return self._result(db.execute("SELECT * FROM worker_jobs WHERE job_key=?", (job_key,)).fetchone())
+                # Otherwise reuse the normal upsert below, which advances the
+                # attempt counter, sets a new lease, and clears the old result.
             previous_attempts = int(row["attempt_count"]) if row else 0
             attempt = previous_attempts + 1
             if attempt > self.max_attempts:
