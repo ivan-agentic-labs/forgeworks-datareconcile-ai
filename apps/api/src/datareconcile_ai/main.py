@@ -160,6 +160,8 @@ def create_app(db_path=None, seed=False):
         store.seed()
     app = FastAPI(title="DataReconcile AI MVP", version="0.2.0")
     app.add_middleware(BodyBudgetMiddleware)
+    from datareconcile_ai.presentation.operations import register_operations
+    register_operations(app, ROOT, "datareconcile-ai")
     app.state.store = store
     artifacts = ArtifactIngestion(store)
 
