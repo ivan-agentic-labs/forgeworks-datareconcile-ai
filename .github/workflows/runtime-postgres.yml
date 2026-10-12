@@ -53,3 +53,17 @@ jobs:
           grep -q 'RESTORED_SCHEMA_OBJECT_DRIFT' /tmp/fw-restore-negative-check.log
           "$PSQL" -h 127.0.0.1 -p 5438 -U postgres -d forgeworks_restore -v ON_ERROR_STOP=1 -c 'DROP INDEX public.fw_disposable_restore_drift_probe'
           python scripts/verify_disposable_restore.py
+      - name: Verify tenant FORCE RLS recovery fail-closed
+        env:
+          PGPASSWORD: synthetic-disposable-ci-only
+          G1_DISPOSABLE_DB: 'yes'
+          FW_DISPOSABLE_OWNER_DSN: 'host=127.0.0.1 port=5438 dbname=forgeworks_runtime user=postgres password=synthetic-disposable-ci-only'
+          FW_PRODUCT_MODULE: datareconcile_ai
+        run: |
+          set -eu
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          "$PSQL" -h 127.0.0.1 -p 5438 -U postgres -d forgeworks_restore -v ON_ERROR_STOP=1 -c 'ALTER TABLE public.memberships NO FORCE ROW LEVEL SECURITY'
+          if python scripts/verify_disposable_restore.py > /tmp/fw-rls-negative.log 2>&1; then exit 1; fi
+          grep -q RESTORED_TENANT_RLS_REQUIRED /tmp/fw-rls-negative.log
+          "$PSQL" -h 127.0.0.1 -p 5438 -U postgres -d forgeworks_restore -v ON_ERROR_STOP=1 -c 'ALTER TABLE public.memberships FORCE ROW LEVEL SECURITY'
+          python scripts/verify_disposable_restore.py
