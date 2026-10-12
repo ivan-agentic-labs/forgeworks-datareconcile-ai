@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 import hashlib
 import io
 import json
@@ -422,13 +422,26 @@ class Store:
             right_candidates = defaultdict(deque)
             for row in right_rows:
                 right_candidates[(row["currency"], row["amount_minor"], row["transaction_type"])].append(row)
+            # Opt-in rule: a money amount and transaction kind are not enough
+            # to determine which individual transaction is which when either
+            # source batch has duplicate candidates. Fail to manual exceptions
+            # rather than inventing an arbitrary financial allocation.
+            unambiguous = rule == "unambiguous-amount-v2"
+            key_of = lambda row: (row["currency"], row["amount_minor"], row["transaction_type"])
+            left_key_counts = Counter(key_of(row) for row in left_rows) if unambiguous else Counter()
+            right_key_counts = Counter(key_of(row) for row in right_rows) if unambiguous else Counter()
             used: set[str] = set()
             unmatched = 0
             matched = 0
             pending_left = []
             for a in left_rows:
-                candidates = right_candidates[(a["currency"], a["amount_minor"], a["transaction_type"])]
-                match = candidates.popleft() if candidates else None
+                key = key_of(a)
+                candidates = right_candidates[key]
+                # Require exactly one matching candidate on *each* source
+                # under the opt-in strict rule. An ambiguous bucket is never
+                # silently allocated regardless of CSV row ordering.
+                ambiguous = unambiguous and (left_key_counts[key] != 1 or right_key_counts[key] != 1)
+                match = candidates.popleft() if candidates and not ambiguous else None
                 if match:
                     matched += 1
                     used.add(match["id"])
@@ -442,10 +455,14 @@ class Store:
             # A mismatch encountered earlier must not consume a later exact match.
             remaining_right = deque(b for b in right_rows if b["id"] not in used)
             for a in pending_left:
-                candidate = remaining_right.popleft() if remaining_right else None
+                candidate = remaining_right.popleft() if remaining_right and not unambiguous else None
                 if candidate:
                     used.add(candidate["id"])
                     reason, right_id = "AMOUNT_MISMATCH", candidate["id"]
+                elif unambiguous and (
+                    left_key_counts[key_of(a)] > 1 or right_key_counts[key_of(a)] > 1
+                ):
+                    reason, right_id = "AMBIGUOUS_AMOUNT", None
                 else:
                     reason, right_id = "MISSING_RIGHT", None
                 unmatched += 1
@@ -460,7 +477,10 @@ class Store:
                     policy = b["transaction_type"] if b["transaction_type"] in {"refund", "reversal"} else "investigated"
                     c.execute(
                         "INSERT INTO exceptions(tenant_id,id,run_id,reason,left_id,right_id,status,version,resolution_policy) VALUES(?,?,?,?,?,?,?,?,?)",
-                        (tenant, str(uuid.uuid4()), rid, "MISSING_LEFT", None, b["id"], "OPEN", 1, policy),
+                        (tenant, str(uuid.uuid4()), rid,
+                         ("AMBIGUOUS_AMOUNT" if unambiguous and (
+                            left_key_counts[key_of(b)] > 1 or right_key_counts[key_of(b)] > 1
+                         ) else "MISSING_LEFT"), None, b["id"], "OPEN", 1, policy),
                     )
             c.execute("UPDATE runs SET unmatched=? WHERE tenant_id=? AND id=?", (unmatched, tenant, rid))
             self._audit(c, tenant, "reconciliation.run_completed", rid, 1, None, {
