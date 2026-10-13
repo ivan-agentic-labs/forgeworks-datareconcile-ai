@@ -4,6 +4,7 @@ from datareconcile_ai.domain.report_signatures import attest_report, ReportSigna
 from datareconcile_ai.presentation.authentication import decode_bearer, verify_session
 
 import os
+from contextlib import asynccontextmanager
 import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -158,7 +159,19 @@ def create_app(db_path=None, seed=False):
         store = Store(db_path or os.getenv("RECONCILE_DB_PATH", str(ROOT / ".runtime/reconcile.db")))
     if seed:
         store.seed()
-    app = FastAPI(title="DataReconcile AI MVP", version="0.2.0")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        start_pool = getattr(store, "start_pool", None)
+        if start_pool:
+            start_pool()
+        try:
+            yield
+        finally:
+            close_store = getattr(store, "close", None)
+            if close_store:
+                close_store()
+
+    app = FastAPI(title="DataReconcile AI MVP", version="0.2.0", lifespan=lifespan)
     app.add_middleware(BodyBudgetMiddleware)
     from datareconcile_ai.presentation.operations import register_operations
     register_operations(app, ROOT, "datareconcile-ai")
