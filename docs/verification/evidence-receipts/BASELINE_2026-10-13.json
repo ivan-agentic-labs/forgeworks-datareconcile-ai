@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "record_id": "datareconcile.baseline.2026-10-13",
+  "repository": "ivan-agentic-labs/forgeworks-datareconcile-ai",
+  "product": "DataReconcile AI",
+  "record_type": "baseline_snapshot",
+  "recorded_on": "2026-10-14",
+  "evaluated_source_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+  "gate_assessment": {
+    "g1_d": "CONDITIONAL_PENDING_SIGNOFF",
+    "g1_e": "PARTIAL_OPEN_BLOCKED",
+    "production_acceptance": "NOT_ACCEPTED"
+  },
+  "evidence": [
+    {
+      "kind": "application_ci",
+      "name": "DataReconcile MVP Application CI",
+      "status": "PASS",
+      "run_id": "38428507757",
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38428507757",
+      "environment": "CI",
+      "workflow_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_identity": "VERIFIED",
+      "scope": "Application test suite, browser integer-precision probe, and configured CI checks for the exact checkout SHA.",
+      "limitations": ["CI success does not establish finance-controller approval, production acceptance, or authorization to process financial records."]
+    },
+    {
+      "kind": "contract_validation",
+      "name": "G1 Contract Verification",
+      "status": "PASS",
+      "run_id": "38428507814",
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38428507814",
+      "environment": "CI",
+      "workflow_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_identity": "VERIFIED",
+      "scope": "Bootstrap, contracts, event schema, and independent OpenAPI validation.",
+      "limitations": ["Contract checks do not approve matching semantics or finance policy."]
+    },
+    {
+      "kind": "postgres_runtime",
+      "name": "DataReconcile PostgreSQL Runtime Proof",
+      "status": "PASS",
+      "run_id": "38428507800",
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38428507800",
+      "environment": "DISPOSABLE",
+      "workflow_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_identity": "VERIFIED",
+      "scope": "Disposable PostgreSQL migrations, tenant/RLS, runtime and logical restore proof.",
+      "limitations": ["This is not production PITR, regional recovery, or finance operations acceptance."]
+    },
+    {
+      "kind": "postgres_runtime",
+      "name": "G2 Disposable PostgreSQL RLS Negative Test",
+      "status": "PASS",
+      "run_id": "38428507786",
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38428507786",
+      "environment": "DISPOSABLE",
+      "workflow_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_identity": "VERIFIED",
+      "scope": "Configured disposable PostgreSQL row-level-security negative checks.",
+      "limitations": ["A disposable RLS test is not authenticated hosted acceptance or production security signoff."]
+    },
+    {
+      "kind": "staging_readiness",
+      "name": "DataReconcile staging public readiness smoke",
+      "status": "PASS",
+      "run_id": "38428507749",
+      "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38428507749",
+      "environment": "STAGING",
+      "workflow_commit": "2ea37cf8864e90032754c1459abef347c6890af4",
+      "subject_commit": null,
+      "subject_identity": "UNKNOWN",
+      "scope": "Public staging health/readiness and anonymous denial checks.",
+      "limitations": ["The deployed service SHA is not proven by this smoke record.", "This is not authenticated product/customer acceptance or finance approval."]
+    }
+  ],
+  "limitations": [
+    "G1-D remains conditional/pending signoff and G1-E remains partial/open/blocked.",
+    "FIN-T01 through FIN-T06 and independent finance/controller approval are not proven by the recorded CI checks.",
+    "The staging smoke workflow commit does not identify the deployed application commit; no production financial acceptance is claimed."
+  ],
+  "source_documents": [
+    {"path": "docs/verification/CURRENT_GATE_EVIDENCE.md", "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/blob/2ea37cf8864e90032754c1459abef347c6890af4/docs/verification/CURRENT_GATE_EVIDENCE.md"},
+    {"path": "docs/verification/DESIGN_GATE_STATUS.md", "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/blob/2ea37cf8864e90032754c1459abef347c6890af4/docs/verification/DESIGN_GATE_STATUS.md"},
+    {"path": "docs/verification/TEST_PLAN.md", "url": "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/blob/2ea37cf8864e90032754c1459abef347c6890af4/docs/verification/TEST_PLAN.md"}
+  ]
+}
