@@ -48,6 +48,35 @@ auto-allocation. That is a **business accounting policy**, not a fact proven by
 unit tests. Do not select `unambiguous-amount-v2` in a production tenant
 until the rule and exception reason have received independent finance signoff.
 
+## Strong transaction identity candidate — `exact-reference-date-v1`
+
+The implementation also offers a separate, explicitly selected candidate rule.
+It is not the default and does not change any existing `exact-v1`,
+`exact-1to1-v1`, or `unambiguous-amount-v2` result. It allocates only when
+currency, signed integer amount, canonical UTC timestamp, transaction type,
+and normalized external reference agree uniquely on both source batches.
+Reference normalization applies Unicode NFC, trim, uppercase, and whitespace
+collapse. Prefix stripping is not guessed; a source-specific prefix rule must
+be defined before that transformation can be enabled. Any duplicate normalized
+identity remains an `AMBIGUOUS_IDENTITY` exception. A unique identity/date with
+a different amount becomes a paired `AMOUNT_MISMATCH` exception. Other rows are
+represented as side-specific missing exceptions.
+
+The candidate is disabled by default. It can only be enabled with
+`ENABLE_EXACT_REFERENCE_DATE_RULE=true` in `development` or `test`; code
+hard-blocks it in production and other environments pending a separately
+reviewed release after finance-controller approval.
+
+Report finalization now also requires exact equality of the two original source
+totals, in addition to a valid one-time row partition, equal allocated-side
+totals, and completed exception review. Accepting an exception for
+investigation does not change or waive source values. An unexplained source
+imbalance returns `CONSERVATION_FAILED`; no automatic adjustment is applied.
+
+This is engineering implementation evidence only. It does not close OD-08 or
+replace the independent finance-controller review, production data approval,
+or the open release gates.
+
 **Production NO-GO** until owner-approved source data, reconciliation
 policy, reviewer roles, retention, access control, and report acceptance
 have independent evidence.

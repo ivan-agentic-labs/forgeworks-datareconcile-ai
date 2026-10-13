@@ -307,6 +307,7 @@ export interface components {
             id: string;
             /** Format: uuid */
             run_id: string;
+            /** @description Typed reconciliation exception. Includes AMBIGUOUS_IDENTITY for duplicate normalized reference/date identities under exact-reference-date-v1. */
             reason_code: string;
             /** Format: uuid */
             left_transaction_id: string | null;
@@ -390,6 +391,7 @@ export interface components {
             left_batch_id: string;
             /** Format: uuid */
             right_batch_id: string;
+            /** @description Implemented versions: exact, exact-v1, exact-1to1-v1, unambiguous-amount-v2, exact-reference-date-v1. The latter is an opt-in candidate requiring a unique normalized reference, canonical UTC timestamp, signed amount, currency, and transaction type match; it is disabled outside development/test by default, and production remains blocked until a separately reviewed release after finance-controller approval. */
             rule_version: string;
         };
         ResolveExceptionRequest: {

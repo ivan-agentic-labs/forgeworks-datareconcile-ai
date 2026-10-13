@@ -105,6 +105,17 @@ def test_stale_resolution_is_single_winner_and_report_is_auditable(tmp_path):
             statuses = sorted(pool.map(lambda _: approve(), range(2)))
         assert statuses == [201, 409]
 
+        for remaining in client.get(
+            f"/v1/reconciliation-runs/{run['id']}/exceptions",
+            headers=headers("reconcile:read"),
+        ).json()["items"][1:]:
+            resolved = client.post(
+                f"/v1/exceptions/{remaining['id']}/resolutions",
+                headers=headers("exception:approve"),
+                json={"decision": "accept-as-investigated", "evidence_sha256": "d" * 64, "expected_version": remaining["version"]},
+            )
+            assert resolved.status_code == 201
+
         finalized = client.post(
             f"/v1/reconciliation-runs/{run['id']}/finalize",
             headers=headers("report:finalize"),
@@ -113,7 +124,7 @@ def test_stale_resolution_is_single_winner_and_report_is_auditable(tmp_path):
         assert finalized.status_code == 201
         body = finalized.json()
         assert body["source_revision"] == run["source_revision"]
-        assert body["totals"]["allocated_total_minor"] == 400
+        assert body["totals"]["allocated_total_minor"] == 100
         assert body["totals"]["conservation_discrepancy_minor"] == 0
         assert client.get(f"/v1/reports/{body['id']}/download", headers=headers("report:read")).json()["source_revision"] == run["source_revision"]
 

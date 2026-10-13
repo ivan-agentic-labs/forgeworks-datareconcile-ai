@@ -16,6 +16,19 @@ Deterministic exact matching of two same-currency transaction CSVs. It remains a
 6. Verify conservation independently for both original lists before finalizing a report. Zero unexplained discrepancy required.
 7. Finalize immutable report with source/effect digests and audit history. AI may explain deterministic reason codes, but never decide matches or adjust values.
 
+**Engineering status (2026-10-13):** `exact-reference-date-v1` is implemented
+as an explicit opt-in candidate; existing rule versions retain their historical
+identity. It compares signed amount, canonical UTC timestamp, normalized
+reference (NFC, trim, uppercase, whitespace collapse), currency and transaction
+type, and leaves ambiguous identities as review exceptions. Finalization now
+blocks when source totals differ, even if exceptions were marked
+`accept-as-investigated`. Source-specific reference-prefix removal is not
+configured. These code and local-test changes do not represent finance
+controller signoff, customer-data acceptance, or production approval; OD-08 and
+release gates remain open. The candidate is disabled by default and hard-blocked
+in production; only development/test can enable it with
+`ENABLE_EXACT_REFERENCE_DATE_RULE=true` until a separately reviewed release.
+
 ## Limits and non-goals
 Owner-designed P0 has no bank connections, fund transfers, auto-resolve, AI amount decisions, or probabilistic matching. Do not conflate reconciliation with money movement.
 

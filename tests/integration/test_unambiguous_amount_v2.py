@@ -66,7 +66,12 @@ def test_ambiguous_duplicate_amounts_never_auto_allocate(tmp_path,left_amounts,r
                                     "accept-as-investigated", "b" * 64, 1)
         assert outcome == "OK"
     report, outcome = store.finalize(TENANT, run["id"], "a" * 64, run["version"])
-    assert outcome == "OK" and report["artifact_sha"]
+    if sum(left_amounts) != sum(right_amounts):
+        assert outcome == "CONSERVATION_FAILED"
+        with store.conn() as db:
+            assert db.execute("SELECT COUNT(*) FROM reports WHERE tenant_id=? AND run_id=?", (TENANT, run["id"])).fetchone()[0] == 0
+    else:
+        assert outcome == "OK" and report["artifact_sha"]
     assert store.totals(TENANT, run["id"])["row_partition_valid"]
 
 
