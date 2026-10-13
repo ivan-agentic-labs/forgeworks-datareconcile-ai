@@ -80,7 +80,7 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
         rows = {side: page.json()["items"] for side, page in row_pages.items()}
         assert all(isinstance(row["amount_minor"], int) for side in rows.values() for row in side)
         assert sum(row["amount_minor"] for row in rows["left"]) == 600
-        assert sum(row["amount_minor"] for row in rows["right"]) == 650
+        assert sum(row["amount_minor"] for row in rows["right"]) == 600
 
         reconcile_body = {
             "left_batch_id": left["id"],
@@ -114,7 +114,7 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
         )
         assert conflict_run.status_code == 409
         assert conflict_run.json()["code"] == "IDEMPOTENCY_CONFLICT"
-        assert run["unmatched_count"] == 1
+        assert run["unmatched_count"] == 2
 
         exception_page = client.get(
             f"/v1/reconciliation-runs/{run['id']}/exceptions",
@@ -122,7 +122,7 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
         )
         assert exception_page.status_code == 200
         exceptions = exception_page.json()["items"]
-        assert len(exceptions) == 1
+        assert len(exceptions) == 2
         exception = exceptions[0]
         assert exception["status"] == "OPEN"
 
@@ -156,6 +156,17 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
             },
         )
         assert resolution.status_code == 201
+        for remaining in exceptions[1:]:
+            resolved = client.post(
+                f"/v1/exceptions/{remaining['id']}/resolutions",
+                headers=headers("exception:approve", idempotency_key="e2e-resolution-0002"),
+                json={
+                    "decision": "accept-as-investigated",
+                    "evidence_sha256": "d" * 64,
+                    "expected_version": remaining["version"],
+                },
+            )
+            assert resolved.status_code == 201
         stale_after_resolution = client.post(
             f"/v1/exceptions/{exception['id']}/resolutions",
             headers=headers("exception:approve", idempotency_key="e2e-resolution-retry"),
@@ -184,10 +195,10 @@ def test_fastapi_and_static_ui_import_rows_reconcile_resolve_finalize_report(tmp
             "conservation_discrepancy_minor",
         ):
             assert isinstance(totals[key], int)
-        assert totals["left_total_minor"] == 600
-        assert totals["right_total_minor"] == 650
-        assert totals["allocated_total_minor"] == 400
-        assert totals["allocated_left_total_minor"] == totals["allocated_right_total_minor"] == 400
+        assert totals["left_total_minor"] == totals["right_total_minor"] == 600
+        assert totals["allocated_total_minor"] == 100
+        assert totals["allocated_left_total_minor"] == totals["allocated_right_total_minor"] == 100
+        assert totals["source_unbalanced_minor"] == 0
         assert totals["conservation_discrepancy_minor"] == 0
 
         download = client.get(
@@ -250,4 +261,3 @@ def test_static_console_exposes_the_same_flow_and_no_transfer_boundary():
     assert "No-transfer boundary" in html
     assert "/v1/transfers" not in html + js
     assert "financial transfer" in html
-

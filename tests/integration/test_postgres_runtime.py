@@ -93,8 +93,8 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
 
     assert store.member(TENANT,USER) and not store.member(other,USER)
     header='external_ref,currency,amount_minor,occurred_at\n'
-    left=header+'l1,USD,100,2026-01-01T00:00:00Z\n'
-    right=header+'r1,USD,100,2026-01-01T00:00:00Z\nr2,USD,200,2026-01-01T00:00:00Z\n'
+    left=header+'l1,USD,100,2026-01-01T00:00:00Z\nl2,USD,200,2026-01-01T00:00:00Z\n'
+    right=header+'r1,USD,100,2026-01-01T00:00:00Z\nr2,USD,50,2026-01-01T00:00:00Z\nr3,USD,150,2026-01-01T00:00:00Z\n'
     a=store.batch(TENANT,'left',hashlib.sha256(left.encode()).hexdigest(),'USD',csv_content=left)
     b=store.batch(TENANT,'right',hashlib.sha256(right.encode()).hexdigest(),'USD',csv_content=right)
     mixed = header + 'idr1,IDR,100,2026-01-01T00:00:00Z\n'
@@ -125,14 +125,20 @@ def test_postgres_import_match_resolve_finalize_download_and_rls(monkeypatch):
     with ThreadPoolExecutor(max_workers=4) as pool:
         ids=list(pool.map(lambda index:peers[index%2].run(TENANT,a['id'],b['id'],'exact-v1')['id'],range(8)))
     assert len(set(ids))==1
-    rid=ids[0];exception=store.exceptions(TENANT,rid)[0]
-    assert exception['reason']=='MISSING_LEFT' and exception['left_id'] is None
+    rid=ids[0];exceptions=store.exceptions(TENANT,rid)
+    assert len(exceptions)==2
+    exception=next(item for item in exceptions if item['reason']=='MISSING_LEFT')
+    assert exception['left_id'] is None
     totals=store.totals(TENANT,rid)
-    assert totals['left_total_minor']==100 and totals['right_total_minor']==300
+    assert totals['left_total_minor']==300 and totals['right_total_minor']==300
+    assert totals['source_unbalanced_minor']==0
     assert totals['allocated_total_minor']==100 and totals['conservation_discrepancy_minor']==0
     def resolve(index):return peers[index].resolve(TENANT,exception['id'],USER,'accept-as-investigated','d'*64,1)[1]
     with ThreadPoolExecutor(max_workers=2) as pool:outcomes=list(pool.map(resolve,range(2)))
     assert sorted(outcomes)==['OK','STALE']
+    for remaining in exceptions:
+        if remaining['id'] != exception['id']:
+            assert store.resolve(TENANT,remaining['id'],USER,'accept-as-investigated','d'*64,1)[1]=='OK'
     report,status=store.finalize(TENANT,rid,'c'*64,1)
     assert status=='OK' and hashlib.sha256(report['content_json'].encode()).hexdigest()==report['artifact_sha']
     assert store.report(other,report['id']) is None

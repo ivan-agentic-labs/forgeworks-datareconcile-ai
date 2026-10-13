@@ -9,6 +9,12 @@ from datareconcile_ai.main import create_app
 from test_hardening import headers, import_csv
 
 
+@pytest.fixture(autouse=True)
+def enable_candidate_rule_for_tests(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("ENABLE_EXACT_REFERENCE_DATE_RULE", "true")
+
+
 def _batch(store, label):
     source = (
         "external_ref,currency,amount_minor,occurred_at\n"
@@ -30,7 +36,7 @@ def test_unknown_financial_rules_cannot_mislabel_legacy_matching(tmp_path, rule)
             assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
 
 
-@pytest.mark.parametrize("rule", ["exact", "exact-v1", "exact-1to1-v1", "unambiguous-amount-v2"])
+@pytest.mark.parametrize("rule", ["exact", "exact-v1", "exact-1to1-v1", "unambiguous-amount-v2", "exact-reference-date-v1"])
 def test_self_reconciliation_is_denied_for_every_supported_rule(tmp_path, rule):
     store = Store(str(tmp_path / "self.sqlite"))
     left = _batch(store, "same-import")
@@ -42,14 +48,15 @@ def test_self_reconciliation_is_denied_for_every_supported_rule(tmp_path, rule):
             assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
 
 
-@pytest.mark.parametrize("rule", ["exact", "exact-v1", "exact-1to1-v1", "unambiguous-amount-v2"])
+@pytest.mark.parametrize("rule", ["exact", "exact-v1", "exact-1to1-v1", "unambiguous-amount-v2", "exact-reference-date-v1"])
 def test_known_rules_remain_supported_without_changing_their_identity(tmp_path, rule):
     store = Store(str(tmp_path / "supported.sqlite"))
     left, right = _batch(store, "left"), _batch(store, "right")
     run = store.run(TENANT, left, right, rule)
     assert run["rule"] == rule
     with store.conn() as db:
-        assert db.execute("SELECT COUNT(*) FROM allocations WHERE tenant_id=? AND run_id=?", (TENANT, run["id"])).fetchone()[0] == 1
+        allocated = db.execute("SELECT COUNT(*) FROM allocations WHERE tenant_id=? AND run_id=?", (TENANT, run["id"])).fetchone()[0]
+    assert allocated == (0 if rule == "exact-reference-date-v1" else 1)
 
 
 def test_http_denies_unknown_rule_and_same_import_without_new_runs(tmp_path):

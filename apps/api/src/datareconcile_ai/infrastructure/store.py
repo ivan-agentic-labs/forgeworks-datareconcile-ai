@@ -68,6 +68,10 @@ class StoreValidationError(ValueError):
 class Store:
     def __init__(self, path: str):
         self.path = path
+        self.allow_exact_reference_date_rule = (
+            os.getenv("APP_ENV", "development").lower() in {"development", "test"}
+            and os.getenv("ENABLE_EXACT_REFERENCE_DATE_RULE", "").lower() in {"1", "true", "yes"}
+        )
         self.allow_fixture_imports = False
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -220,7 +224,8 @@ class Store:
 
     @staticmethod
     def _fixture_rows(label: str) -> list[dict[str, object]]:
-        values = [(100, "r1"), (200, "r2"), (300, "r3")] if label == "left-fixture" else [(100, "s1"), (250, "s2"), (300, "s3")]
+        # Synthetic demo sides have equal totals while retaining reviewed mismatches.
+        values = [(100, "r1"), (200, "r2"), (300, "r3")] if label == "left-fixture" else [(100, "s1"), (250, "s2"), (250, "s3")]
         timestamp = now()
         return [
             {
@@ -309,6 +314,15 @@ class Store:
             raise StoreValidationError("CSV_EMPTY", "CSV must contain at least one data row")
         return rows
 
+    @staticmethod
+    def _normalized_reference(value: str) -> str:
+        """Normalize only the explicitly configured identity transformations.
+
+        Prefix stripping is intentionally absent until a source-specific prefix
+        policy is configured; guessing prefixes could merge distinct accounts.
+        """
+        return " ".join(unicodedata.normalize("NFC", value).strip().upper().split())
+
     def batch(
         self,
         tenant: str,
@@ -371,8 +385,13 @@ class Store:
     def run(self, tenant: str, left: str, right: str, rule: str, *, actor: str | None = None, idempotency_key: str | None = None) -> sqlite3.Row:
         # Never silently execute the legacy matching algorithm under a
         # caller-supplied, unimplemented policy name.
-        if rule not in {"exact", "exact-v1", "exact-1to1-v1", "unambiguous-amount-v2"}:
+        if rule not in {"exact", "exact-v1", "exact-1to1-v1", "unambiguous-amount-v2", "exact-reference-date-v1"}:
             raise StoreValidationError("UNSUPPORTED_RECONCILIATION_RULE", "Unknown reconciliation rule version")
+        if rule == "exact-reference-date-v1" and not self.allow_exact_reference_date_rule:
+            raise StoreValidationError(
+                "RECONCILIATION_RULE_DISABLED",
+                "exact-reference-date-v1 is disabled unless explicitly enabled in development/test; production requires a separately reviewed release",
+            )
         if left == right:
             raise StoreValidationError("IDENTICAL_SOURCE_BATCHES", "A source import cannot be reconciled against itself")
         left_batch, right_batch = self.get_batch(tenant, left), self.get_batch(tenant, right)
@@ -425,69 +444,108 @@ class Store:
                     return existing
                 raise
             left_rows, right_rows = self.rows(tenant, left), self.rows(tenant, right)
-            right_candidates = defaultdict(deque)
-            for row in right_rows:
-                right_candidates[(row["currency"], row["amount_minor"], row["transaction_type"])].append(row)
-            # Opt-in rule: a money amount and transaction kind are not enough
-            # to determine which individual transaction is which when either
-            # source batch has duplicate candidates. Fail to manual exceptions
-            # rather than inventing an arbitrary financial allocation.
-            unambiguous = rule == "unambiguous-amount-v2"
-            key_of = lambda row: (row["currency"], row["amount_minor"], row["transaction_type"])
-            left_key_counts = Counter(key_of(row) for row in left_rows) if unambiguous else Counter()
-            right_key_counts = Counter(key_of(row) for row in right_rows) if unambiguous else Counter()
             used: set[str] = set()
             unmatched = 0
             matched = 0
-            pending_left = []
-            for a in left_rows:
-                key = key_of(a)
-                candidates = right_candidates[key]
-                # Require exactly one matching candidate on *each* source
-                # under the opt-in strict rule. An ambiguous bucket is never
-                # silently allocated regardless of CSV row ordering.
-                ambiguous = unambiguous and (left_key_counts[key] != 1 or right_key_counts[key] != 1)
-                match = candidates.popleft() if candidates and not ambiguous else None
-                if match:
-                    matched += 1
-                    used.add(match["id"])
-                    c.execute(
-                        "INSERT INTO allocations(tenant_id,id,run_id,left_id,right_id,rule,matched_amount_minor,currency) VALUES(?,?,?,?,?,?,?,?)",
-                        (tenant, str(uuid.uuid4()), rid, a["id"], match["id"], rule, a["amount_minor"], a["currency"]),
-                    )
-                    continue
-                pending_left.append(a)
-            # Reserve all exact matches before assigning rows to exceptions.
-            # A mismatch encountered earlier must not consume a later exact match.
-            remaining_right = deque(b for b in right_rows if b["id"] not in used)
-            for a in pending_left:
-                candidate = remaining_right.popleft() if remaining_right and not unambiguous else None
-                if candidate:
-                    used.add(candidate["id"])
-                    reason, right_id = "AMOUNT_MISMATCH", candidate["id"]
-                elif unambiguous and (
-                    left_key_counts[key_of(a)] > 1 or right_key_counts[key_of(a)] > 1
-                ):
-                    reason, right_id = "AMBIGUOUS_AMOUNT", None
-                else:
-                    reason, right_id = "MISSING_RIGHT", None
-                unmatched += 1
-                policy = a["transaction_type"] if a["transaction_type"] in {"refund", "reversal"} else "investigated"
-                c.execute(
-                    "INSERT INTO exceptions(tenant_id,id,run_id,reason,left_id,right_id,status,version,resolution_policy) VALUES(?,?,?,?,?,?,?,?,?)",
-                    (tenant, str(uuid.uuid4()), rid, reason, a["id"], right_id, "OPEN", 1, policy),
+            if rule == "exact-reference-date-v1":
+                # Owner P0 candidate rule: require a unique exact transaction
+                # identity on both sides. Timestamps were canonicalized to UTC
+                # at import; reference normalization is NFC + trim + uppercase
+                # + whitespace collapse. Never guess a removable prefix.
+                identity_key = lambda row: (
+                    row["currency"], self._normalized_reference(row["external_ref"]),
+                    row["occurred_at"], row["transaction_type"],
                 )
-            for b in right_rows:
-                if b["id"] not in used:
+                left_groups, right_groups = defaultdict(list), defaultdict(list)
+                for row in left_rows:
+                    left_groups[identity_key(row)].append(row)
+                for row in right_rows:
+                    right_groups[identity_key(row)].append(row)
+                for a in left_rows:
+                    key = identity_key(a)
+                    left_group, right_group = left_groups[key], right_groups[key]
+                    if len(left_group) > 1 or len(right_group) > 1:
+                        reason, right_id = "AMBIGUOUS_IDENTITY", None
+                    elif len(right_group) == 1:
+                        b = right_group[0]
+                        used.add(b["id"])
+                        if a["amount_minor"] == b["amount_minor"]:
+                            matched += 1
+                            c.execute(
+                                "INSERT INTO allocations(tenant_id,id,run_id,left_id,right_id,rule,matched_amount_minor,currency) VALUES(?,?,?,?,?,?,?,?)",
+                                (tenant, str(uuid.uuid4()), rid, a["id"], b["id"], rule, a["amount_minor"], a["currency"]),
+                            )
+                            continue
+                        reason, right_id = "AMOUNT_MISMATCH", b["id"]
+                    else:
+                        reason, right_id = "MISSING_RIGHT", None
+                    unmatched += 1
+                    policy = a["transaction_type"] if a["transaction_type"] in {"refund", "reversal"} else "investigated"
+                    c.execute(
+                        "INSERT INTO exceptions(tenant_id,id,run_id,reason,left_id,right_id,status,version,resolution_policy) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (tenant, str(uuid.uuid4()), rid, reason, a["id"], right_id, "OPEN", 1, policy),
+                    )
+                for b in right_rows:
+                    if b["id"] in used:
+                        continue
+                    key = identity_key(b)
+                    reason = "AMBIGUOUS_IDENTITY" if len(left_groups[key]) > 1 or len(right_groups[key]) > 1 else "MISSING_LEFT"
                     unmatched += 1
                     policy = b["transaction_type"] if b["transaction_type"] in {"refund", "reversal"} else "investigated"
                     c.execute(
                         "INSERT INTO exceptions(tenant_id,id,run_id,reason,left_id,right_id,status,version,resolution_policy) VALUES(?,?,?,?,?,?,?,?,?)",
-                        (tenant, str(uuid.uuid4()), rid,
-                         ("AMBIGUOUS_AMOUNT" if unambiguous and (
-                            left_key_counts[key_of(b)] > 1 or right_key_counts[key_of(b)] > 1
-                         ) else "MISSING_LEFT"), None, b["id"], "OPEN", 1, policy),
+                        (tenant, str(uuid.uuid4()), rid, reason, None, b["id"], "OPEN", 1, policy),
                     )
+            else:
+                right_candidates = defaultdict(deque)
+                for row in right_rows:
+                    right_candidates[(row["currency"], row["amount_minor"], row["transaction_type"])].append(row)
+                # Opt-in amount-only rule remains available for reproducibility;
+                # the new identity rule above is stricter and separately versioned.
+                unambiguous = rule == "unambiguous-amount-v2"
+                key_of = lambda row: (row["currency"], row["amount_minor"], row["transaction_type"])
+                left_key_counts = Counter(key_of(row) for row in left_rows) if unambiguous else Counter()
+                right_key_counts = Counter(key_of(row) for row in right_rows) if unambiguous else Counter()
+                pending_left = []
+                for a in left_rows:
+                    key = key_of(a)
+                    candidates = right_candidates[key]
+                    ambiguous = unambiguous and (left_key_counts[key] != 1 or right_key_counts[key] != 1)
+                    match = candidates.popleft() if candidates and not ambiguous else None
+                    if match:
+                        matched += 1
+                        used.add(match["id"])
+                        c.execute(
+                            "INSERT INTO allocations(tenant_id,id,run_id,left_id,right_id,rule,matched_amount_minor,currency) VALUES(?,?,?,?,?,?,?,?)",
+                            (tenant, str(uuid.uuid4()), rid, a["id"], match["id"], rule, a["amount_minor"], a["currency"]),
+                        )
+                        continue
+                    pending_left.append(a)
+                remaining_right = deque(b for b in right_rows if b["id"] not in used)
+                for a in pending_left:
+                    candidate = remaining_right.popleft() if remaining_right and not unambiguous else None
+                    if candidate:
+                        used.add(candidate["id"])
+                        reason, right_id = "AMOUNT_MISMATCH", candidate["id"]
+                    elif unambiguous and (left_key_counts[key_of(a)] > 1 or right_key_counts[key_of(a)] > 1):
+                        reason, right_id = "AMBIGUOUS_AMOUNT", None
+                    else:
+                        reason, right_id = "MISSING_RIGHT", None
+                    unmatched += 1
+                    policy = a["transaction_type"] if a["transaction_type"] in {"refund", "reversal"} else "investigated"
+                    c.execute(
+                        "INSERT INTO exceptions(tenant_id,id,run_id,reason,left_id,right_id,status,version,resolution_policy) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (tenant, str(uuid.uuid4()), rid, reason, a["id"], right_id, "OPEN", 1, policy),
+                    )
+                for b in right_rows:
+                    if b["id"] not in used:
+                        unmatched += 1
+                        policy = b["transaction_type"] if b["transaction_type"] in {"refund", "reversal"} else "investigated"
+                        reason = "AMBIGUOUS_AMOUNT" if unambiguous and (left_key_counts[key_of(b)] > 1 or right_key_counts[key_of(b)] > 1) else "MISSING_LEFT"
+                        c.execute(
+                            "INSERT INTO exceptions(tenant_id,id,run_id,reason,left_id,right_id,status,version,resolution_policy) VALUES(?,?,?,?,?,?,?,?,?)",
+                            (tenant, str(uuid.uuid4()), rid, reason, None, b["id"], "OPEN", 1, policy),
+                        )
             c.execute("UPDATE runs SET unmatched=? WHERE tenant_id=? AND id=?", (unmatched, tenant, rid))
             self._audit(c, tenant, "reconciliation.run_completed", rid, 1, None, {
                 "run_id": rid, "source_revision": source_revision, "matched_count": matched,
@@ -571,6 +629,11 @@ class Store:
                 return False
             if allocation["matched_amount_minor"] != a["amount_minor"] or allocation["currency"] != a["currency"] or allocation["rule"] != run["rule"]:
                 return False
+            if allocation["rule"] == "exact-reference-date-v1" and (
+                a["occurred_at"] != b["occurred_at"]
+                or self._normalized_reference(a["external_ref"]) != self._normalized_reference(b["external_ref"])
+            ):
+                return False
             seen_left.append(a["id"]); seen_right.append(b["id"])
         for exception in exceptions:
             a, b = exception["left_id"], exception["right_id"]
@@ -642,7 +705,10 @@ class Store:
             if not self.partition_valid(tenant, rid):
                 return run, "CONSERVATION_FAILED"
             totals = self.totals(tenant, rid)
-            if not totals or totals["allocated_total_minor"] < 0 and totals["matched_count"] == 0:
+            if (not totals
+                    or totals["allocated_total_minor"] < 0 and totals["matched_count"] == 0
+                    or totals["source_unbalanced_minor"] != 0
+                    or totals["conservation_discrepancy_minor"] != 0):
                 return run, "CONSERVATION_FAILED"
             # Exact-match allocations carry their own equality proof. Exceptions
             # are an explicit reviewed scope and never become transfers.
@@ -676,4 +742,3 @@ class Store:
             "INSERT INTO audit_events(tenant_id,id,event_type,aggregate_id,aggregate_version,actor_id,occurred_at,payload_json) VALUES(?,?,?,?,?,?,?,?)",
             (tenant, str(uuid.uuid4()), event_type, aggregate_id, version, actor, now(), json.dumps(payload, sort_keys=True, separators=(",", ":"))),
         )
-

@@ -53,8 +53,8 @@ def test_duplicate_reconcile_is_idempotent_and_matching_is_deterministic(tmp_pat
             "SELECT left_id,right_id,matched_amount_minor FROM allocations WHERE tenant_id=? AND run_id=?",
             (TENANT, first["id"]),
         ).fetchall()
-        assert len(allocations) == 2
-        assert sum(row["matched_amount_minor"] for row in allocations) == 400
+        assert len(allocations) == 1
+        assert sum(row["matched_amount_minor"] for row in allocations) == 100
         assert len({row["left_id"] for row in allocations}) == len(allocations)
         assert len({row["right_id"] for row in allocations}) == len(allocations)
 
@@ -124,9 +124,9 @@ def test_concurrent_reconcile_allocations_are_unique(tmp_path):
             "SELECT left_id,right_id FROM allocations WHERE tenant_id=? AND run_id=?",
             (TENANT, run_id),
         ).fetchall()
-        assert len(allocations) == 2
-        assert len({row["left_id"] for row in allocations}) == 2
-        assert len({row["right_id"] for row in allocations}) == 2
+        assert len(allocations) == 1
+        assert len({row["left_id"] for row in allocations}) == 1
+        assert len({row["right_id"] for row in allocations}) == 1
 
 
 def test_stale_resolution_conflict_allows_one_winner(tmp_path):
@@ -155,13 +155,13 @@ def test_finalized_report_is_immutable_and_conserves_allocated_minor_units(tmp_p
     store = seeded_store(tmp_path)
     left, right = imported_pair(store)
     run = store.run(TENANT, left["id"], right["id"], "exact-1to1-v1")
-    exception = store.exceptions(TENANT, run["id"])[0]
-    assert store.resolve(TENANT, exception["id"], USER, "accept-as-investigated", "d" * 64, 1)[1] == "OK"
+    for exception in store.exceptions(TENANT, run["id"]):
+        assert store.resolve(TENANT, exception["id"], USER, "accept-as-investigated", "d" * 64, 1)[1] == "OK"
 
     report, status = store.finalize(TENANT, run["id"], "c" * 64, 1)
     assert status == "OK"
     totals = store.totals(TENANT, run["id"])
-    assert totals["allocated_left_total_minor"] == totals["allocated_right_total_minor"] == 400
+    assert totals["allocated_left_total_minor"] == totals["allocated_right_total_minor"] == 100
     assert totals["conservation_discrepancy_minor"] == 0
 
     same_report, retry_status = store.finalize(TENANT, run["id"], "e" * 64, 1)
