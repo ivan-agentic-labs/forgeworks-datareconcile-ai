@@ -131,3 +131,29 @@ def test_supabase_s3_rejects_unsafe_prefixes(monkeypatch,endpoint,style):
         monkeypatch.setenv(k,v)
     with pytest.raises(HTTPException) as err:ObjectStorage("datareconcile-ai")
     assert err.value.status_code==503
+
+
+@pytest.mark.parametrize("environment,bucket,allowed", [
+    ("staging","fw-staging-datareconcile-ai",True),
+    ("staging","fw-staging-apishield-agent",False),
+    ("staging","fw-staging-specforge-ai",False),
+    ("staging","fw-staging-agenttest-lab",False),
+    ("staging","fw-staging-accessfix-ai",False),
+    ("staging","fw-production-datareconcile-ai",False),
+    ("production","fw-production-datareconcile-ai",True),
+    ("production","fw-staging-datareconcile-ai",False),
+])
+def test_supabase_bucket_bound_to_runtime_product(monkeypatch,environment,bucket,allowed):
+    for name,value in {
+        "APP_ENV":environment,"S3_ENDPOINT":"https://fljekuwplgkrpdoajyhn.storage.supabase.co/storage/v1/s3",
+        "S3_BUCKET":bucket,"S3_URL_STYLE":"path","S3_REGION":"ap-northeast-2",
+        "S3_ACCESS_KEY_ID":"synthetic-access","S3_SECRET_ACCESS_KEY":"synthetic-secret",
+    }.items():
+        monkeypatch.setenv(name,value)
+    if allowed:
+        assert ObjectStorage("datareconcile-ai").bucket == bucket
+    else:
+        with pytest.raises(HTTPException) as error:
+            ObjectStorage("datareconcile-ai")
+        assert error.value.status_code == 503
+        assert error.value.detail["code"] == "STORAGE_NOT_CONFIGURED"
