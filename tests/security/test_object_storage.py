@@ -101,3 +101,33 @@ def test_canonical_s3_endpoint_remains_valid(monkeypatch):
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("S3_ENDPOINT", "https://storage.example.invalid")
     assert ObjectStorage("datareconcile-ai").host == "storage.example.invalid"
+
+
+def test_supabase_s3_private_path_signed_exactly(monkeypatch):
+    values={"S3_ENDPOINT":"https://fljekuwplgkrpdoajyhn.storage.supabase.co/storage/v1/s3",
+            "S3_BUCKET":"fw-staging-datareconcile-ai","S3_REGION":"ap-northeast-2",
+            "S3_URL_STYLE":"path","S3_ACCESS_KEY_ID":"synthetic-access",
+            "S3_SECRET_ACCESS_KEY":"synthetic-test-secret"}
+    for k,v in values.items():monkeypatch.setenv(k,v)
+    store=ObjectStorage("datareconcile-ai")
+    req=store.signed_request("PUT","datareconcile-ai/fixture",b"data",
+                              datetime(2026,10,14,tzinfo=timezone.utc))
+    assert req.full_url==("https://fljekuwplgkrpdoajyhn.storage.supabase.co/storage/v1/s3/"
+                          "fw-staging-datareconcile-ai/datareconcile-ai/fixture")
+    assert "20261014/ap-northeast-2/s3/aws4_request" in req.get_header("Authorization")
+    assert req.get_header("X-amz-content-sha256")==hashlib.sha256(b"data").hexdigest()
+
+
+@pytest.mark.parametrize("endpoint,style",[
+    ("https://untrusted.example/storage/v1/s3","path"),
+    ("https://fljekuwplgkrpdoajyhn.storage.supabase.co/storage/v1/s3/extra","path"),
+    ("https://fljekuwplgkrpdoajyhn.storage.supabase.co/storage/v1/s3","virtual-host"),
+    ("https://x.supabase.co/storage/v1/s3","path"),
+])
+def test_supabase_s3_rejects_unsafe_prefixes(monkeypatch,endpoint,style):
+    for k,v in {"S3_ENDPOINT":endpoint,"S3_URL_STYLE":style,
+                "S3_BUCKET":"fw-staging-datareconcile-ai","S3_REGION":"ap-northeast-2",
+                "S3_ACCESS_KEY_ID":"synthetic-access","S3_SECRET_ACCESS_KEY":"synthetic-test-secret"}.items():
+        monkeypatch.setenv(k,v)
+    with pytest.raises(HTTPException) as err:ObjectStorage("datareconcile-ai")
+    assert err.value.status_code==503
