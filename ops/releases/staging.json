@@ -2,38 +2,39 @@
   "schema": "forgeworks-staging-release-v1",
   "product": "datareconcile-ai",
   "environment": "staging",
-  "revision_sha": "a2eec8bbb83da1d69528373f1e14a919762c2d6e",
+  "revision_sha": "70ee65026b244006c70197f580119c0421820a01",
   "runtime_manifest": {
     "profile": "forgeworks-runtime-manifest-v1",
     "file_count": 37,
-    "sha256": "9023d8d4a3dd7959eede20b1f87a9532d7655918a30652c61e2c0c21c049bb44"
+    "sha256": "eafe476aa2924c06c2fd7c622731b7abd33cb93148e50fc630f1bda44aeb1998"
   },
   "railway_project_id": "1b35f35d-ad5b-4b93-ad20-ed68251b4589",
   "railway_environment_id": "0395e7ac-10f8-4004-8bb7-ddee901343c7",
   "railway_service_id": "34688a14-872b-43a5-ab5b-8d2e488c7b5f",
-  "deployment_id": "1a3499a3-ae05-4533-a7e1-b2b45c96dd9a",
+  "deployment_id": "6ca6c055-1fc8-4e93-8766-8ac3d749d430",
   "deployment_status": "SUCCESS",
-  "observed_at": "2026-10-14T07:55:55Z",
+  "observed_at": "2026-10-14T08:14:12Z",
   "ci_urls": [
     "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38518473917",
     "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38521516802",
     "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38525437249",
     "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38528406231",
-    "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38531680241"
+    "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38531680241",
+    "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38533777988"
   ],
   "hosted_probe": {
     "result": "PASS",
-    "scope": "Exact staging runtime identity, health/readiness and denied anonymous product/metrics access",
-    "proof_url": "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38531680241",
+    "scope": "Five-product staging identity/readiness and anonymous business/metrics denial",
+    "proof_url": "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38533777988",
     "private_metrics": "NOT_VERIFIED",
     "authenticated_tenant": "NOT_VERIFIED",
-    "observed_at": "2026-10-14T07:55:55Z"
+    "observed_at": "2026-10-14T08:14:12Z"
   },
   "production_acceptance": "NOT_ACCEPTED",
   "rollback": {
-    "previous_revision_sha": "270066386b24d17702b82bcc144531bbbadf5b61",
-    "previous_deployment_id": "cb182ce6-1023-4679-88e0-bf5cc2a7ccc3",
-    "notes": "Rollback requires exact tested source and config; database/data restore reviewed separately."
+    "previous_revision_sha": "a2eec8bbb83da1d69528373f1e14a919762c2d6e",
+    "previous_deployment_id": "1a3499a3-ae05-4533-a7e1-b2b45c96dd9a",
+    "notes": "Rollback selected app version; database and object restoration must be separately reviewed."
   },
   "limits": [
     "No authenticated cross-tenant or real business integration acceptance",
