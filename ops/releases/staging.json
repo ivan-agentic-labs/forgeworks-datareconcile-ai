@@ -1,0 +1,38 @@
+{
+  "schema": "forgeworks-staging-release-v1",
+  "product": "datareconcile-ai",
+  "environment": "staging",
+  "revision_sha": "535d6014478da110ac96dc6f701d9c6a5a677e28",
+  "runtime_manifest": {
+    "profile": "forgeworks-runtime-manifest-v1",
+    "file_count": 37,
+    "sha256": "180ef48d72db4b31143af16da02589f2c20ab6d2ca1fd64339e1a63abaf4b830"
+  },
+  "railway_project_id": "1b35f35d-ad5b-4b93-ad20-ed68251b4589",
+  "railway_environment_id": "0395e7ac-10f8-4004-8bb7-ddee901343c7",
+  "railway_service_id": "34688a14-872b-43a5-ab5b-8d2e488c7b5f",
+  "deployment_id": "54ec2f1a-a8b5-4978-ba7d-e1a040234457",
+  "deployment_status": "SUCCESS",
+  "observed_at": "2026-10-14T05:55:00Z",
+  "ci_urls": [
+    "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38518473917",
+    "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38519369397"
+  ],
+  "hosted_probe": {
+    "result": "PASS",
+    "scope": "Exact five-service public identity/readiness and anonymous metrics/business boundary",
+    "proof_url": "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38519369397",
+    "private_metrics": "NOT_VERIFIED",
+    "authenticated_tenant": "NOT_VERIFIED"
+  },
+  "production_acceptance": "NOT_ACCEPTED",
+  "rollback": {
+    "previous_revision_sha": "df9e057e83af95cac1303f789c87ddb57a4a0c0a",
+    "previous_deployment_id": "3e5cf453-701e-4503-8ae8-94e86d9f8bc8",
+    "notes": "Restore previous source SHA and matching FORGEWORKS_RELEASE_SHA together. Database rollback is separate."
+  },
+  "limits": [
+    "No authenticated cross-tenant or real business integration acceptance",
+    "No live disaster recovery, provider audit, production SLO or privacy/legal acceptance"
+  ]
+}
