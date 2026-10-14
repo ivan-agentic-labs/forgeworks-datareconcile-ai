@@ -2,35 +2,36 @@
   "schema": "forgeworks-staging-release-v1",
   "product": "datareconcile-ai",
   "environment": "staging",
-  "revision_sha": "fd3294551ebc35e891f50fc191a17e9d22e13880",
+  "revision_sha": "ec8d41774dbe2402c2ac0cd96185aff09a4b70de",
   "runtime_manifest": {
     "profile": "forgeworks-runtime-manifest-v1",
     "file_count": 37,
-    "sha256": "180ef48d72db4b31143af16da02589f2c20ab6d2ca1fd64339e1a63abaf4b830"
+    "sha256": "77585c9f0bfc0e2f6f0a0e003f5481858fce1fa20118f4a8390eebcc4bde4389"
   },
   "railway_project_id": "1b35f35d-ad5b-4b93-ad20-ed68251b4589",
   "railway_environment_id": "0395e7ac-10f8-4004-8bb7-ddee901343c7",
   "railway_service_id": "34688a14-872b-43a5-ab5b-8d2e488c7b5f",
-  "deployment_id": "86c53728-8f73-4a3e-9282-10856061f829",
+  "deployment_id": "025badb3-1fc4-4cff-8c33-c06bc7cf70e3",
   "deployment_status": "SUCCESS",
-  "observed_at": "2026-10-14T06:18:43Z",
+  "observed_at": "2026-10-14T06:57:52Z",
   "ci_urls": [
     "https://github.com/ivan-agentic-labs/forgeworks-datareconcile-ai/actions/runs/38518473917",
-    "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38521516802"
+    "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38521516802",
+    "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38525437249"
   ],
   "hosted_probe": {
     "result": "PASS",
-    "scope": "Exact fleet staging identity/readiness and anonymous access boundaries",
-    "proof_url": "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38521516802",
+    "scope": "Exact five-product public staging identity, readiness and anonymous access boundaries",
+    "proof_url": "https://github.com/ivan-agentic-labs/forgeworks-apishield-agent/actions/runs/38525437249",
     "private_metrics": "NOT_VERIFIED",
     "authenticated_tenant": "NOT_VERIFIED",
-    "observed_at": "2026-10-14T06:18:43Z"
+    "observed_at": "2026-10-14T06:57:52Z"
   },
   "production_acceptance": "NOT_ACCEPTED",
   "rollback": {
-    "previous_revision_sha": "535d6014478da110ac96dc6f701d9c6a5a677e28",
-    "previous_deployment_id": "54ec2f1a-a8b5-4978-ba7d-e1a040234457",
-    "notes": "Rollback needs matching source/release SHA and verified region; rollback of schema or data is separately reviewed."
+    "previous_revision_sha": "fd3294551ebc35e891f50fc191a17e9d22e13880",
+    "previous_deployment_id": "86c53728-8f73-4a3e-9282-10856061f829",
+    "notes": "Pin previous source SHA and corresponding release SHA together; database migration rollback requires separate review."
   },
   "limits": [
     "No authenticated cross-tenant or real business integration acceptance",
