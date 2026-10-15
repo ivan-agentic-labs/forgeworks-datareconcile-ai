@@ -2,12 +2,12 @@
 
 | Test ID | Scenario | Fixture / setup | Expected acceptance result | Execution |
 |---|---|---|---|---|
-| FIN-T01 | CSV amount contains locale ambiguity | 1,234 ambiguous fixture | quarantine, no guess | NOT RUN |
-| FIN-T02 | Concurrent review approvals | two stale writes | one accepted, other 409 | NOT RUN |
-| FIN-T03 | Duplicate external reference across batches | duplicate rows | preserve provenance; no duplicate allocation | NOT RUN |
-| FIN-T04 | Integer precision boundary | large minor unit fixture | no floating point or overflow | NOT RUN |
-| FIN-T05 | Multi-currency pair | IDR vs USD rows | blocked P0 | NOT RUN |
-| FIN-T06 | Intentional unbalanced ledger | missing entry | cannot finalize report | NOT RUN |
+| FIN-T01 | CSV amount contains locale ambiguity | 1,234 ambiguous fixture | quarantine, no guess | PASS_LOCAL — `tests/integration/test_financial_test_plan.py::test_fin_t01_locale_ambiguous_amount_is_quarantined_without_guess`; SQLite parser rejects quoted non-canonical amount before batch/row persistence. Local synthetic only. |
+| FIN-T02 | Concurrent review approvals | two stale writes | one accepted, other 409 | PASS_LOCAL — `tests/integration/test_hardening.py::test_stale_resolution_is_single_winner_and_report_is_auditable` and `tests/resilience/test_worker_reliability.py::test_stale_resolution_conflict_allows_one_winner`; disposable SQLite/TestClient and ThreadPoolExecutor prove one 201/OK and one 409/STALE. No hosted concurrency claim. |
+| FIN-T03 | Duplicate external reference across batches | duplicate rows | preserve provenance; no duplicate allocation | PASS_LOCAL — `tests/integration/test_financial_test_plan.py::test_fin_t03_cross_batch_duplicate_reference_preserves_provenance`; synthetic same-currency rows with the same references across source batches retain distinct source IDs and one allocation per side. Does not test external connector behavior. |
+| FIN-T04 | Integer precision boundary | large minor unit fixture | no floating point or overflow | PASS_LOCAL — `tests/integration/test_financial_test_plan.py::test_fin_t04_int64_rows_and_aggregate_totals_remain_exact` and `tests/integration/test_hardening.py::test_strict_csv_schema_digest_and_integer_boundaries`; signed int64 rows and Python aggregate totals remain exact in disposable SQLite. No production database claim. |
+| FIN-T05 | Multi-currency pair | IDR vs USD rows | blocked P0 | PASS_LOCAL — `tests/integration/test_currency_invariant.py::test_mixed_currency_is_rejected_without_results`; parameterized IDR/USD, USD/IDR, and USD/EUR pairs reject with `CURRENCY_MISMATCH` and create no reconciliation results. Same-currency local path is separately covered. |
+| FIN-T06 | Intentional unbalanced ledger | missing entry | cannot finalize report | PASS_LOCAL — `tests/integration/test_exact_reference_date_v1.py::test_source_total_imbalance_blocks_report_even_after_review` and `::test_http_finalization_returns_409_for_reviewed_source_imbalance`; after synthetic review, a 10-minor-unit source discrepancy remains blocked as `CONSERVATION_FAILED`, with no report. No production acceptance claim. |
 
 ## Coverage and execution gates
 - Unit: every pure domain invariant, deterministic cross-validation, state guard, authorization policy and financial arithmetic where relevant.
