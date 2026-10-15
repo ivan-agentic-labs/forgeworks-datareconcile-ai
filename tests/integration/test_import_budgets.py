@@ -104,9 +104,9 @@ def test_explicit_known_utc_offsets_remain_supported():
     assert result[0]["occurred_at"] == "2026-10-09T00:00:00Z"
 
 
-@pytest.mark.parametrize("bad_character", ["\\ud800", "\\udfff"])
+@pytest.mark.parametrize("bad_character", [chr(0xD800), chr(0xDFFF)])
 def test_invalid_unicode_csv_source_is_a_typed_validation_failure(tmp_path, bad_character):
-    source = HEADER + f"bad{bad_character},USD,1,2026-10-09T00:00:00Z\\n"
+    source = HEADER + "bad" + bad_character + ",USD,1,2026-10-09T00:00:00Z" + chr(10)
     with pytest.raises(StoreValidationError) as parsed:
         Store.parse_csv(source, "USD")
     assert parsed.value.code == "CSV_INVALID_UNICODE"
