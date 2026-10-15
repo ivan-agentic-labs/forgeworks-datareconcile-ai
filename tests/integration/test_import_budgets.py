@@ -102,3 +102,19 @@ def test_explicit_known_utc_offsets_remain_supported():
     source = HEADER + "known-utc,USD,100,2026-10-09T00:00:00+00:00\n"
     result = Store.parse_csv(source, "USD")
     assert result[0]["occurred_at"] == "2026-10-09T00:00:00Z"
+
+
+@pytest.mark.parametrize("bad_character", ["\\ud800", "\\udfff"])
+def test_invalid_unicode_csv_source_is_a_typed_validation_failure(tmp_path, bad_character):
+    source = HEADER + f"bad{bad_character},USD,1,2026-10-09T00:00:00Z\\n"
+    with pytest.raises(StoreValidationError) as parsed:
+        Store.parse_csv(source, "USD")
+    assert parsed.value.code == "CSV_INVALID_UNICODE"
+
+    store = Store(str(tmp_path / "invalid-unicode.db"))
+    store.seed()
+    with pytest.raises(StoreValidationError) as imported:
+        store.batch(TENANT, "bad-unicode", "a" * 64, "USD", csv_content=source)
+    assert imported.value.code == "CSV_INVALID_UNICODE"
+    with store.conn() as db:
+        assert db.execute("SELECT COUNT(*) FROM batches WHERE source_label='bad-unicode'").fetchone()[0] == 0
