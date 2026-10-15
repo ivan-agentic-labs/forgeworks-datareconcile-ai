@@ -249,7 +249,11 @@ class Store:
     def _parse_csv(csv_content: str, currency: str) -> list[dict[str, object]]:
         if not isinstance(csv_content, str) or not csv_content.strip():
             raise StoreValidationError("CSV_EMPTY", "csv_content must contain a header and at least one data row")
-        if len(csv_content.encode("utf-8")) > MAX_CSV_BYTES:
+        try:
+            encoded_csv = csv_content.encode("utf-8", errors="strict")
+        except UnicodeError as exc:
+            raise StoreValidationError("CSV_INVALID_UNICODE", "CSV source must contain valid UTF-8") from exc
+        if len(encoded_csv) > MAX_CSV_BYTES:
             raise StoreValidationError("CSV_BUDGET_EXCEEDED", "CSV source exceeds the 1 MiB import budget")
         if csv_content.startswith("\ufeff"):
             csv_content = csv_content[1:]
@@ -339,7 +343,11 @@ class Store:
         if not re.fullmatch(r"[A-Z]{3}", currency):
             raise StoreValidationError("CURRENCY_INVALID", "currency must be an uppercase ISO-style three-letter code")
         if csv_content is not None:
-            actual_sha = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+            try:
+                csv_bytes = csv_content.encode("utf-8", errors="strict")
+            except UnicodeError as exc:
+                raise StoreValidationError("CSV_INVALID_UNICODE", "CSV source must contain valid UTF-8") from exc
+            actual_sha = hashlib.sha256(csv_bytes).hexdigest()
             if actual_sha != sha:
                 raise StoreValidationError("SOURCE_DIGEST_MISMATCH", "file_sha256 does not match csv_content")
             values = self.parse_csv(csv_content, currency)
