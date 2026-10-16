@@ -20,11 +20,11 @@
     <section class="panel connection" aria-labelledby="connection-title">
       <div class="section-heading"><div><p class="kicker">01 / SESSION</p><h2 id="connection-title">Connect to the API</h2></div><span id="health" class="status">Not checked</span></div>
       <div class="grid three">
-        <label>API base URL<input id="baseUrl" value="http://localhost:8000" autocomplete="url"></label>
-        <label>Bearer token<input id="token" type="password" placeholder="Paste a synthetic token" autocomplete="off"></label>
+        <label>API base URL<input id="baseUrl" type="url" placeholder="Same-origin API (or local development host)" autocomplete="url"></label>
+        <label>Bearer token<input id="token" type="password" placeholder="Paste a scoped bearer token" autocomplete="off"></label>
         <button id="healthButton" class="secondary">Check health</button>
       </div>
-      <p class="hint">The token is kept in memory only. Use synthetic fixtures; never paste production credentials or financial data.</p>
+      <p class="hint">The token stays in memory. API requests are limited to the page origin or an explicitly configured local development host.</p>
     </section>
 
     <section class="panel" aria-labelledby="import-title">
@@ -32,12 +32,12 @@
       <form id="importForm">
         <div class="grid four">
           <label>Side<select id="importSide"><option value="left">Left / source A</option><option value="right">Right / source B</option></select></label>
-          <label>Source label<input id="sourceLabel" value="left-fixture" required maxlength="200"></label>
+          <label>Source label<input id="sourceLabel" placeholder="Name the source, e.g. bank-export" required maxlength="200"></label>
           <label>Currency<input id="currency" value="USD" pattern="[A-Z]{3}" maxlength="3" required></label>
-          <label>File SHA-256<input id="fileSha" value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" pattern="[0-9a-f]{64}" required></label>
+          <label>File SHA-256<input id="fileSha" placeholder="SHA-256 of uploaded CSV" pattern="[0-9a-f]{64}" required></label>
         </div>
         <div class="grid two">
-          <label>Artifact UUID<input id="artifactId" value="33333333-3333-3333-3333-333333333333" required></label>
+          <label>Artifact UUID<input id="artifactId" placeholder="Commit a CSV artifact to populate this field" required></label>
           <label>Profile version<input id="profileVersion" value="strict-v1" required></label>
         </div>
         <label>Optional synthetic CSV content<textarea id="csvContent" rows="3" placeholder="external_ref,currency,amount_minor,occurred_at&#10;fixture-1,USD,100,2026-01-01T00:00:00Z"></textarea></label>
@@ -69,7 +69,7 @@
           <h3>Resolve an exception</h3>
           <label>Exception ID<input id="exceptionId" placeholder="Load exceptions first" required></label>
           <label>Decision<select id="decision"><option value="accept-as-investigated">accept-as-investigated</option><option value="reject">reject</option><option value="accept-as-refund">accept-as-refund</option><option value="accept-as-reversal">accept-as-reversal</option></select></label>
-          <label>Evidence SHA-256<input id="evidenceSha" value="dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" pattern="[0-9a-f]{64}" required></label>
+          <label>Evidence SHA-256<input id="evidenceSha" placeholder="SHA-256 of reviewed evidence" pattern="[0-9a-f]{64}" required></label>
           <label>Expected exception version<input id="exceptionVersion" type="number" min="1" value="1" required></label>
           <button class="primary" type="submit">Record resolution</button>
           <p class="hint">If another reviewer already changed this exception, the API returns <code>STALE_VERSION</code>; refresh before retrying.</p>
@@ -77,7 +77,7 @@
         <form id="finalizeForm" class="subpanel">
           <h3>Finalize immutable report</h3>
           <label>Expected run version<input id="runVersion" type="number" min="1" value="1" required></label>
-          <label>Approved summary SHA-256<input id="summarySha" value="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" pattern="[0-9a-f]{64}" required></label>
+          <label>Approved summary SHA-256<input id="summarySha" placeholder="SHA-256 of owner-approved summary" pattern="[0-9a-f]{64}" required></label>
           <button class="primary" type="submit">Finalize report</button>
           <p class="hint">Finalization is blocked while exceptions are open and proves allocated-left equals allocated-right.</p>
           <div id="reportBox" class="report" aria-live="polite"><p class="empty">No report finalized.</p></div>
@@ -86,7 +86,7 @@
     </section>
 
     <aside id="message" class="message" role="status" aria-live="polite"></aside>
-    <footer>Demo console · all amounts shown as integer minor units · reconciliation is not settlement</footer>
+    <footer>Reconciliation console · amounts are integer minor units · reconciliation is not financial settlement</footer>
   </main>
   <script type="module" src="./app.js"></script>
 <script src="./auth-panel.js" defer></script>
