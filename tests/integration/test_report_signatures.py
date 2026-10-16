@@ -266,4 +266,5 @@ def test_storage_rejects_forged_report_approval_or_version(tmp_path, summary, ve
     run = store.run(TENANT, left, right, "exact-v1")
     with pytest.raises(StoreValidationError):
         store.finalize(TENANT, run["id"], summary, version)
-    assert store.report(TENANT, run["id"]) is None
+    with store.conn() as db:
+        assert db.execute("SELECT COUNT(*) FROM reports WHERE tenant_id=? AND run_id=?", (TENANT, run["id"])).fetchone()[0] == 0
