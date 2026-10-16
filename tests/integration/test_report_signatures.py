@@ -249,3 +249,21 @@ def test_verifier_rejects_validly_signed_overflowed_report_content(tmp_path):
     expected = {**binding, "artifact_sha256": forged["artifact_sha"]}
     with pytest.raises(ReportSignatureError, match="REPORT_CONTENT_NONFINITE_NUMBER"):
         verify_report_attestation(signed, public, expected)
+
+@pytest.mark.parametrize("summary,version", [
+    ("not-a-digest", 1),
+    ("A" * 64, 1),
+    ("a" * 63, 1),
+    ("a" * 64, True),
+    ("a" * 64, 0),
+])
+def test_storage_rejects_forged_report_approval_or_version(tmp_path, summary, version):
+    from datareconcile_ai.infrastructure.store import StoreValidationError
+    app = create_app(str(tmp_path / "invalid-approval.db"), seed=True)
+    store = app.state.store
+    left = batch(store, "left", [100])
+    right = batch(store, "right", [100])
+    run = store.run(TENANT, left, right, "exact-v1")
+    with pytest.raises(StoreValidationError):
+        store.finalize(TENANT, run["id"], summary, version)
+    assert store.report(TENANT, run["id"]) is None
