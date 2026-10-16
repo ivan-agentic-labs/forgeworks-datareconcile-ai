@@ -218,3 +218,34 @@ def test_verifier_requires_strict_expected_binding_types(tmp_path):
     assert json.loads(envelope["signed_payload"])["run_version"] == 1
     with pytest.raises(ReportSignatureError, match="REPORT_BINDING_MISMATCH"):
         verify_report_attestation(envelope, public, {**binding, "run_version": True})
+
+
+def _report_with_overflowed_exponent(report):
+    content = json.loads(report["content_json"])
+    content["totals"]["untrusted_numeric_field"] = "__OVERFLOW_NUMBER__"
+    raw = json.dumps(content, sort_keys=True, separators=(",", ":")).replace(
+        '"__OVERFLOW_NUMBER__"', "1e999")
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    return {**dict(report), "content_json": raw, "artifact_sha": digest, "ledger_sha": digest}
+
+
+def test_signer_rejects_overflowed_financial_json_exponents(tmp_path):
+    _, report, _ = prepared(tmp_path)
+    _, private, _ = keys()
+    with pytest.raises(ReportSignatureError, match="REPORT_CONTENT_NONFINITE_NUMBER"):
+        attest_report(_report_with_overflowed_exponent(report), TENANT, private)
+
+
+def test_verifier_rejects_validly_signed_overflowed_report_content(tmp_path):
+    _, report, binding = prepared(tmp_path)
+    signer, private, public = keys()
+    envelope = attest_report(report, TENANT, private)
+    forged = _report_with_overflowed_exponent(report)
+    signed = _resign_modified_payload(envelope, signer, {
+        "report_json": forged["content_json"],
+        "artifact_sha256": forged["artifact_sha"],
+        "ledger_sha256": forged["ledger_sha"],
+    })
+    expected = {**binding, "artifact_sha256": forged["artifact_sha"]}
+    with pytest.raises(ReportSignatureError, match="REPORT_CONTENT_NONFINITE_NUMBER"):
+        verify_report_attestation(signed, public, expected)
