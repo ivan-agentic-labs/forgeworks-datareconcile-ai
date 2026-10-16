@@ -6,6 +6,7 @@ const source = fs.readFileSync('apps/web/app.js', 'utf8').split('function errorM
 function consoleContext(body, status = 200, legacy = false) {
   const context = vm.createContext({
     document: {getElementById: (id) => ({value: id === 'baseUrl' ? 'https://example.invalid' : ''})},
+    URL,
     fetch: async () => new Response(body, {status}),
     ...(legacy ? {JSON: {parse: (text, reviver) => JSON.parse(text, (key, value) => reviver(key, value))}} : {}),
   });
