@@ -691,6 +691,12 @@ class Store:
             }
 
     def finalize(self, tenant: str, rid: str, summary: str, version: int) -> tuple[sqlite3.Row | None, str]:
+        # HTTP validation is not the only path into the storage layer. An
+        # unchecked label must never be signed as an approved evidence digest.
+        if type(summary) is not str or not re.fullmatch(r"[0-9a-f]{64}", summary):
+            raise StoreValidationError("APPROVED_SUMMARY_DIGEST_INVALID", "Approved summary must be a canonical SHA-256 digest")
+        if type(version) is not int or version < 1:
+            raise StoreValidationError("REPORT_VERSION_INVALID", "Run version must be a positive integer")
         with self.conn() as c:
             c.execute("BEGIN IMMEDIATE")
             run = c.execute("SELECT * FROM runs WHERE tenant_id=? AND id=?", (tenant, rid)).fetchone()
