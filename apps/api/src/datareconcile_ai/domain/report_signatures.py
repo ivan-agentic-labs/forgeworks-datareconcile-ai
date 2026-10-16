@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import json
+import math
 from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -44,8 +45,17 @@ def _check_report_content_consistency(payload):
     def nonfinite(_):
         raise ReportSignatureError('REPORT_CONTENT_NONFINITE_NUMBER')
 
+    def finite_float(number):
+        # json.loads otherwise converts an exponent such as 1e999 to infinity
+        # even when parse_constant rejects literal Infinity and NaN.
+        value = float(number)
+        if not math.isfinite(value):
+            raise ReportSignatureError('REPORT_CONTENT_NONFINITE_NUMBER')
+        return value
+
     try:
-        content = json.loads(raw, object_pairs_hook=unique, parse_constant=nonfinite)
+        content = json.loads(raw, object_pairs_hook=unique,
+                             parse_constant=nonfinite, parse_float=finite_float)
     except ReportSignatureError:
         raise
     except (ValueError, RecursionError, TypeError):
