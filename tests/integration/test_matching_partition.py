@@ -53,7 +53,7 @@ def test_report_rejects_an_exception_reusing_allocated_source(tmp_path):
         db.execute("UPDATE exceptions SET right_id=?,status='RESOLVED' WHERE tenant_id=? AND id=?", (allocations[0]['right_id'],TENANT,exceptions[0]['id']))
     assert not store.partition_valid(TENANT,run['id'])
     assert not store.totals(TENANT,run['id'])['row_partition_valid']
-    _, status = store.finalize(TENANT,run['id'],'synthetic report',run['version'])
+    _, status = store.finalize(TENANT,run['id'],'a' * 64,run['version'])
     assert status == 'CONSERVATION_FAILED'
 
 
@@ -64,5 +64,5 @@ def test_report_rejects_missing_source_partition(tmp_path):
     with store.conn() as db:
         db.execute('DELETE FROM exceptions WHERE tenant_id=? AND id=?',(TENANT,exceptions[0]['id']))
     assert not store.partition_valid(TENANT,run['id'])
-    _, status = store.finalize(TENANT,run['id'],'synthetic report',run['version'])
+    _, status = store.finalize(TENANT,run['id'],'a' * 64,run['version'])
     assert status == 'CONSERVATION_FAILED'
