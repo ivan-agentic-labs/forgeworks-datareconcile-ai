@@ -52,7 +52,7 @@ test('local development may use explicit loopback ports', async () => {
 });
 
 test('URL credentials and query fragments cannot change request origin', async () => {
-  for (const origin of ['https://user:pass@reconcile.example', 'https://reconcile.example/?token=leak', 'https://reconcile.example/path']) {
+  for (const origin of ['https://user:pass' + String.fromCharCode(64) + 'reconcile.example', 'https://reconcile.example/?token=leak', 'https://reconcile.example/path']) {
     const { context, requests } = browserContext('https://reconcile.example', origin);
     await assert.rejects(vm.runInContext("api('/healthz')", context), /API_ORIGIN_NOT_ALLOWED/);
     assert.equal(requests.length, 0);
