@@ -61,6 +61,11 @@ try:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
         page.locator('#baseUrl').fill(f'http://127.0.0.1:{server.server_port}')
+        # Synthetic fixture identities belong in the test, never as defaults
+        # presented to a real reviewer or report approver.
+        page.locator('#sourceLabel').fill('browser-proof')
+        page.locator('#artifactId').fill('33333333-3333-3333-3333-333333333333')
+        page.locator('#fileSha').fill('a' * 64)
         page.locator('#importForm button[type=submit]').click()
         expect(page.locator('#rowsButton')).to_be_enabled()
         page.locator('#rowsButton').click()
@@ -69,6 +74,7 @@ try:
         page.locator('#rightBatchId').fill('proof')
         page.locator('#reconcileForm button[type=submit]').click()
         expect(page.locator('#runStatus')).to_contain_text('MATCHED')
+        page.locator('#summarySha').fill('c' * 64)
         page.locator('#finalizeForm button[type=submit]').click()
         expect(page.locator('#reportBox')).to_contain_text('Report finalized')
         expect(page.locator('#rowSummary')).to_contain_text(f'{TOTAL:,}')
