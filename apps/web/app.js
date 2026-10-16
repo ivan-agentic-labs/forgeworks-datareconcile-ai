@@ -1,6 +1,23 @@
 const state = { batches: { left: null, right: null }, run: null, exceptions: [], report: null };
 const $ = (id) => document.getElementById(id);
-const base = () => $('baseUrl').value.replace(/\/$/, '');
+const base = () => {
+  const configured = $('baseUrl').value.trim();
+  const browserOrigin = typeof location !== 'undefined' ? location.origin : null;
+  const target = new URL(configured || browserOrigin || 'https://localhost');
+  if (!['https:', 'http:'].includes(target.protocol) ||
+      target.username || target.password || target.search || target.hash ||
+      (target.pathname !== '/' && target.pathname !== '')) {
+    throw new Error('API_ORIGIN_NOT_ALLOWED');
+  }
+  if (browserOrigin) {
+    const browserHost = new URL(browserOrigin).hostname;
+    const isLocalDev = ['localhost', '127.0.0.1'].includes(browserHost) &&
+      ['localhost', '127.0.0.1'].includes(target.hostname);
+    if (target.origin !== browserOrigin && !isLocalDev) throw new Error('API_ORIGIN_NOT_ALLOWED');
+    if (target.protocol !== 'https:' && !isLocalDev) throw new Error('API_HTTPS_REQUIRED');
+  }
+  return target.origin;
+};
 const token = () => $('token').value.trim();
 const show = (text, kind = 'success') => { const el = $('message'); el.textContent = text; el.className = `message show ${kind}`; };
 const clearMessage = () => { $('message').className = 'message'; $('message').textContent = ''; };
