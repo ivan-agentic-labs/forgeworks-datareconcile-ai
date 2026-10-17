@@ -268,3 +268,11 @@ def test_storage_rejects_forged_report_approval_or_version(tmp_path, summary, ve
         store.finalize(TENANT, run["id"], summary, version)
     with store.conn() as db:
         assert db.execute("SELECT COUNT(*) FROM reports WHERE tenant_id=? AND run_id=?", (TENANT, run["id"])).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("invalid", [0, -1, True, "2"])
+def test_signer_rejects_invalid_run_version_before_issuing_attestation(tmp_path, invalid):
+    _, report, _ = prepared(tmp_path)
+    _, private, _ = keys()
+    with pytest.raises(ReportSignatureError, match="REPORT_PAYLOAD_INVALID"):
+        attest_report({**dict(report), "run_version": invalid}, TENANT, private)
