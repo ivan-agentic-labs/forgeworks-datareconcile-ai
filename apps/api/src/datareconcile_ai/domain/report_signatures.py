@@ -93,6 +93,12 @@ def attest_report(report, tenant_id, private_key_pem):
         'approved_summary_sha256':report['approved_summary_sha'], 'run_version':report['run_version'],
         'finalized_at':report['finalized_at'], 'report_json':report['content_json']}
     _check_report_content_consistency(fields)
+    # Never emit an attestation that the independent verifier must reject.
+    # A bool is an int subclass in Python but is not a valid run version.
+    if type(fields['run_version']) is not int or fields['run_version'] < 1:
+        raise ReportSignatureError('REPORT_PAYLOAD_INVALID')
+    for field in PAYLOAD_FIELDS - {'run_version'}:
+        _bytes(fields[field])
     payload = _json(fields)
     encoded = _bytes(payload)
     public = key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
